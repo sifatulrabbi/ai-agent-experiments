@@ -1,7 +1,12 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 ---
+
 description: Use Bun instead of Node.js, npm, pnpm, or vite.
-globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
-alwaysApply: false
+alwaysApply: true
+
 ---
 
 Default to using Bun instead of Node.js.
@@ -12,16 +17,6 @@ Default to using Bun instead of Node.js.
 - Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
 - Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
 - Bun automatically loads .env, so don't use dotenv.
-
-## APIs
-
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
 
 ## Testing
 
@@ -35,77 +30,66 @@ test("hello world", () => {
 });
 ```
 
-## Frontend
+## Project Overview
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+This is an LLM agent project that executes TypeScript code with access to external capabilities (tools). The agent is built using LangChain and LangGraph with OpenAI's GPT models.
 
-Server:
+## Development Commands
 
-```ts#index.ts
-import index from "./index.html"
+- **Run the agent**: `bun run dev` or `bun ./src/index.ts`
+- **Install dependencies**: `bun install`
 
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
+## Architecture
+
+### Core Components
+
+1. **Agent (`src/agent.ts`)**: LangGraph-based agent with a simple graph flow:
+   - `llmCallNode`: Invokes the LLM with system prompt and binds available tools
+   - `shouldContinue`: Routes to either tool execution or END based on tool calls
+   - `toolsNode`: Executes tool calls using LangChain's ToolNode
+
+2. **Interactive CLI (`src/index.ts`)**:
+   - Readline-based chat interface that streams agent responses
+   - Maintains conversation history across turns
+   - Displays both reasoning and text content blocks from LLM responses
+
+3. **System Prompt Builder (`src/buildSystemPrompt.ts`)**:
+   - Dynamically builds system prompts that include available capabilities
+   - Provides instructions on how to use the `execute_code` tool
+   - Explains capability discovery and declaration reading
+
+4. **LLM Tools (`src/llmTools/`)**:
+   - `executeCodeHandler.ts`: Executes TypeScript code snippets in temporary files using Bun
+   - `discoverCapabilities.ts`: Finds all `.d.ts` files in `capabilities/declarations/`
+   - `readCapabilityDeclaration.ts`: Reads declaration files for detailed API information
+
+### Capabilities System
+
+The project uses a capabilities pattern where:
+
+1. **Declaration files** (`capabilities/declarations/*.d.ts`) define TypeScript type definitions and JSDoc for external tools
+2. **Implementation files** (`capabilities/*.ts`) contain actual implementations that match the declarations
+3. **Path mapping** in `tsconfig.json`: `@tools/*` maps to `./capabilities/*`
+4. **Runtime execution**: Code executed via `execute_code` tool can import capabilities using `@tools/` namespace
+
+Example:
+
+```typescript
+import { getEmails, sendEmail } from "@tools/emailTools";
+const emails = await getEmails();
 ```
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
+### Key Files
 
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
+- `src/agent.ts:25-31` - LLM model configuration (GPT-5.1 with reasoning)
+- `src/agent.ts:39-59` - Conditional routing logic for tool execution
+- `src/llmTools/executeCodeHandler.ts:11-46` - Code execution in `.tmp/` directory
+- `capabilities/declarations/` - Tool type declarations for LLM awareness
+- `capabilities/` - Actual tool implementations
 
-With the following `frontend.tsx`:
+### Adding New Capabilities
 
-```tsx#frontend.tsx
-import React from "react";
-
-// import .css files directly and it works
-import './index.css';
-
-import { createRoot } from "react-dom/client";
-
-const root = createRoot(document.body);
-
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
-
-root.render(<Frontend />);
-```
-
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.md`.
+1. Create a TypeScript declaration file in `capabilities/declarations/<tool>.d.ts`
+2. Implement the actual functions in `capabilities/<tool>.ts`
+3. The agent will automatically discover the declaration file via `discoverCapabilities()`
+4. LLM can read the declaration and import/execute using the `execute_code` tool
