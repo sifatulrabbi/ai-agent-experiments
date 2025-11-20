@@ -1,20 +1,13 @@
-import type { EmailObject, EmailObjectRecord } from "emailTools";
+import type { EmailObject, EmailObjectRecord } from "./declarations/emailTools";
 
-/**
- * Get emails of the current user you are assisting.
- * @returns An array of EmailObjectRecord
- * @throws If the fetching of the email fails then it will throw an `Error`.
- */
 export async function getEmails(): Promise<EmailObjectRecord[]> {
   try {
-    const response = await fetch("/api/emails");
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch emails: ${response.statusText}`);
-    }
-
-    const emails: EmailObjectRecord[] = await response.json();
-    return emails;
+    // const response = await fetch("/api/emails");
+    // if (!response.ok) {
+    //   throw new Error(`Failed to fetch emails: ${response.statusText}`);
+    // }
+    // const emails: EmailObjectRecord[] = await response.json();
+    return [];
   } catch (error) {
     throw new Error(
       `Error fetching emails: ${error instanceof Error ? error.message : String(error)}`,
@@ -22,12 +15,6 @@ export async function getEmails(): Promise<EmailObjectRecord[]> {
   }
 }
 
-/**
- * Send an email on behalf of the user you are assisting.
- * @param {EmailObject} emailObj - An EmailObject
- * @returns A EmailObjectRecord upon sending the email to the recipients
- * @throws If sending of the email fails after the 3rd try it will throw an `Error`.
- */
 export async function sendEmail(
   emailObj: EmailObject,
 ): Promise<EmailObjectRecord> {
