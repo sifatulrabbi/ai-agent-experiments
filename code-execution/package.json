@@ -5,7 +5,7 @@
     "email": "sifatulrabbii@gmail.com",
     "url": "https://sifatulrabbi.com"
   },
-  "license": "MIT",
+  "license": "../LICENSE",
   "module": "src/index.ts",
   "type": "module",
   "scripts": {
