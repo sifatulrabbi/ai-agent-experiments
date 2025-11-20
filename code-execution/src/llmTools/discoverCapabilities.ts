@@ -24,7 +24,7 @@ export async function discoverCapabilities(): Promise<string> {
       .map((file, index) => {
         const relativePath = relative(
           process.cwd(),
-          join(declarationsDir, file)
+          join(declarationsDir, file),
         );
         return `${index + 1}. ${relativePath}`;
       })

@@ -1,4 +1,6 @@
+import { tool } from "langchain";
 import { join } from "node:path";
+import z from "zod";
 
 /**
  * Reads capability declaration files from the capabilities/declarations directory.
@@ -29,18 +31,13 @@ export async function readCapabilityDeclarations(
     const filePath = join(declarationsDir, fileName);
 
     try {
-      // Use Bun.file to read the file
       const file = Bun.file(filePath);
-
-      // Check if file exists
       const exists = await file.exists();
       if (!exists) {
         throw new Error(
           `Capability declaration file "${fileName}" not found in ${declarationsDir}`,
         );
       }
-
-      // Read and return the file content
       const content = await file.text();
       return { fileName, content };
     } catch (error) {
@@ -68,3 +65,50 @@ export async function readCapabilityDeclarations(
 
   return results;
 }
+
+/**
+ * Tool that allows the LLM to read capability declaration files.
+ * This helps the LLM understand the full API of a capability before using it.
+ */
+export const readDeclarationTool = tool(
+  async ({ fileNames }: { fileNames: string[] }) => {
+    try {
+      const declarations = await readCapabilityDeclarations(fileNames);
+
+      let result = "# Capability Declaration Files\n\n";
+      for (const [fileName, content] of declarations.entries()) {
+        result += `## ${fileName}\n\n\`\`\`typescript\n${content}\n\`\`\`\n\n`;
+      }
+
+      return result;
+    } catch (err) {
+      console.error(
+        "Failed to read declaration files due to internal error:",
+        err,
+      );
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      return `Failed to read declaration files due to internal error: ${errorMessage}`;
+    }
+  },
+  {
+    name: "read_capability_declaration",
+    description: `Read one or more capability declaration files to understand their full API.
+
+Declaration files contain TypeScript type definitions, function signatures, and JSDoc documentation
+that explain how to use each capability.
+
+Use this tool when you need to:
+- Understand the full API of a capability before using it
+- See all available functions and types in a capability
+- Read detailed documentation and examples
+
+The files are located in capabilities/declarations/ and end with .d.ts extension.`,
+    schema: z.object({
+      fileNames: z
+        .array(z.string())
+        .describe(
+          "Array of declaration file names to read (e.g., ['emailTools.d.ts'])",
+        ),
+    }),
+  },
+);

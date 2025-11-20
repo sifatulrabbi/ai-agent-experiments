@@ -1,2 +1,6 @@
+export { executeCodeHandler, executeCodeTool } from "./executeCodeHandler";
 export { discoverCapabilities } from "./discoverCapabilities";
-export { readCapabilityDeclarations } from "./readCapabilityDeclaration";
+export {
+  readCapabilityDeclarations,
+  readDeclarationTool,
+} from "./readCapabilityDeclaration";
