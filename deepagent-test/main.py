@@ -52,6 +52,7 @@ async def main():
         await store.setup()
 
         agent = create_deep_agent(
+            model=model,
             store=store,
             backend=lambda rt: CompositeBackend(
                 default=StateBackend(rt),
@@ -67,6 +68,15 @@ Your persistent memory structure:
 """.strip(),
             tools=[internet_search],
         )
+
+        while True:
+            user_input = input("USER: ")
+            result = await agent.ainvoke(
+                {
+                    "messages": [{"role": "user", "content": user_input}],
+                }
+            )
+            print(result.get("messages", [])[-1].content)
 
 
 if __name__ == "__main__":
