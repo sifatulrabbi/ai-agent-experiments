@@ -15,6 +15,8 @@ import { createXlsxSkill } from "../../skills/xlsx";
 import { createSubAgentSkill } from "../../skills/sub-agent";
 
 async function main(): Promise<void> {
+  const model = openai("gpt-5.2");
+
   const fs = createStubFs({
     "/readme.md": "# Hello\nWelcome to the workspace.",
     "/docs/plan.md": "## Plan\n1. Build the agent\n2. Test it\n3. Ship it",
@@ -37,10 +39,9 @@ async function main(): Promise<void> {
     }),
   ];
 
-  const orchestrator = new AgentOrchestrator({ skills });
+  const orchestrator = new AgentOrchestrator({ skills, model });
   const result = await orchestrator.run({
-    model: openai("gpt-5.2"),
-    userMessage: "What files are in my workspace?",
+    messages: [{ role: "user", content: "What files are in my workspace?" }],
   });
 
   console.log("\n--- Final Response ---");
