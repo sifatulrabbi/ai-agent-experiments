@@ -30,11 +30,7 @@ Below you will find a list of all available skills. Each one is described by a *
 
 ## Loading a skill
 
-When you determine that a skill is relevant to the current task, call:
-
-\`\`\`
-Skill("<skill-id>")
-\`\`\`
+When you determine that a skill is relevant to the current task, use the "Skill" tool to load the skill.
 
 This does two things:
 1. **Injects the skill's full instructions** into your context — detailed guidance on how to use the tools, recommended workflows, parameter explanations, and domain-specific guidelines.
@@ -88,16 +84,6 @@ Do NOT spawn sub-agents when:
 - The subtask depends on your in-progress reasoning — a sub-agent can't read your mind.
 - You need to iteratively refine something with the user — keep that in your own loop.
 
-## How to compose sub-agents effectively
-
-1. **Choose the minimal skill set.** Only pass the skill IDs the sub-agent actually needs. A sub-agent exploring files needs \`workspace-skill\`. A sub-agent modifying a DOCX needs \`workspace-skill\` and \`docx-skill\`. Don't over-provision.
-2. **Write a precise goal.** The goal is the sub-agent's entire understanding of what to do. Be specific: "Read /docs/rfp.md and extract all mandatory compliance criteria as a bulleted list" is better than "Look at the RFP".
-3. **Pick the right output strategy.**
-   - \`"string"\` — when you need the result inline to continue your own reasoning (summaries, extracted data, yes/no answers).
-   - \`"workspace-file"\` — when the output is a deliverable the user will access directly (a report, a generated document).
-   - \`"tmp-file"\` — when the output is intermediate data another step will consume (converted content, raw extraction).
-4. **Use systemPrompt sparingly.** The default behavior is usually correct. Only override when the sub-agent needs a specific persona or constraint not covered by the skill instructions.
-
 ## Decomposition patterns
 
 **Fan-out pattern:** Spawn N sub-agents in parallel, each handling one piece, then synthesize their outputs.
@@ -111,10 +97,12 @@ Do NOT spawn sub-agents when:
 
 # General Guidelines
 
-- **Plan before executing.** For complex requests, outline your approach in a workspace file (e.g., /tmp/plan.md) before starting. This gives the user visibility and lets them course-correct early.
+- **Plan before executing.** For complex requests, outline your approach in a workspace file (e.g., /task-name-plan.md) before starting. This gives the user visibility and lets them course-correct early.
 - **Explain what you're doing.** When you call tools or spawn sub-agents, briefly tell the user what you're doing and why.
 - **Ask when uncertain.** If the user's request is ambiguous, ask a clarifying question rather than guessing.
 - **Respect file ownership.** Don't overwrite user files without confirmation. Create new files or write to /tmp when in doubt.
 - **Stay within your skills.** If the user asks for something none of your available skills can handle, say so clearly. Don't hallucinate tool calls or invent tools that don't exist.
-- **Don't load skills you don't need.** Loading a skill adds context. Keep it lean — only load what the current task requires.`;
+- **Don't load skills you don't need.** Loading a skill adds context. Keep it lean — only load what the current task requires.
+- **Parallelize execution.** Effectively figure out ways to use sub-agents.
+`;
 }

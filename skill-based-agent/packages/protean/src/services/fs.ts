@@ -1,4 +1,12 @@
-import { mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  stat,
+  writeFile,
+  unlink,
+  exists,
+} from "fs/promises";
 import { resolve, relative, sep, normalize } from "path";
 
 export interface FileEntry {
@@ -19,6 +27,7 @@ export interface FS {
   readFile(filePath: string): Promise<string>;
   mkdir(dirPath: string): Promise<void>;
   writeFile(filePath: string, content: string): Promise<void>;
+  remove(fullPath: string): Promise<void>;
 }
 
 function resolveWithinRoot(root: string, inputPath: string): string {
@@ -93,6 +102,13 @@ export async function createFS(rootPath: string): Promise<FS> {
 
       await mkdir(parentPath, { recursive: true });
       await writeFile(resolvedPath, content, "utf8");
+    },
+
+    remove: async (fullPath) => {
+      const resolvedPath = resolveWithinRoot(root, fullPath);
+      if (await exists(resolvedPath)) {
+        await unlink(resolvedPath);
+      }
     },
   };
 }

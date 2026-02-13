@@ -1,0 +1,93 @@
+"use client";
+
+import type { UIMessage } from "ai";
+import { MessageResponse } from "@/components/ai-elements/message";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai-elements/reasoning";
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+} from "@/components/ai-elements/tool";
+import { isThreadToolPart } from "@/components/chat/thread-ui-shared";
+
+interface ThreadMessagePartsProps {
+  isLastMessage: boolean;
+  isStreaming: boolean;
+  message: UIMessage;
+  messageKey: string;
+}
+
+export function ThreadMessageParts({
+  isLastMessage,
+  isStreaming,
+  message,
+  messageKey,
+}: ThreadMessagePartsProps) {
+  return (
+    <>
+      {message.parts.map((part, index) => {
+        if (part.type === "reasoning") {
+          if (!part.text.trim()) {
+            return null;
+          }
+
+          const isReasoningStreaming =
+            isStreaming && isLastMessage && index === message.parts.length - 1;
+
+          return (
+            <Reasoning
+              className="w-full"
+              isStreaming={isReasoningStreaming}
+              key={`${messageKey}-reasoning-${index}`}
+            >
+              <ReasoningTrigger />
+              <ReasoningContent>{part.text}</ReasoningContent>
+            </Reasoning>
+          );
+        }
+
+        if (part.type === "text") {
+          return (
+            <MessageResponse
+              key={`${messageKey}-${index}`}
+              className="w-full text-base"
+            >
+              {part.text}
+            </MessageResponse>
+          );
+        }
+
+        if (isThreadToolPart(part)) {
+          const toolKey =
+            part.toolCallId?.trim() || `${messageKey}-tool-${index}`;
+
+          return (
+            <Tool key={toolKey} className="w-full">
+              {part.type === "dynamic-tool" ? (
+                <ToolHeader
+                  state={part.state}
+                  toolName={part.toolName}
+                  type={part.type}
+                />
+              ) : (
+                <ToolHeader state={part.state} type={part.type} />
+              )}
+              <ToolContent>
+                <ToolInput input={part.input} />
+                <ToolOutput errorText={part.errorText} output={part.output} />
+              </ToolContent>
+            </Tool>
+          );
+        }
+
+        return null;
+      })}
+    </>
+  );
+}

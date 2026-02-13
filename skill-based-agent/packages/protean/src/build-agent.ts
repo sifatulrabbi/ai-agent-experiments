@@ -1,5 +1,4 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
-import { resolve } from "node:path";
 import { createOrchestration } from "./orchestration";
 import { createFS } from "./services/fs";
 import { createSubAgent } from "./services/sub-agent";
@@ -18,8 +17,10 @@ import {
 } from "./services/stubs";
 
 export async function buildAgent() {
-  const workspaceFsPath = resolve(import.meta.dir, "../../../tmp/project");
-  const fs = await createFS(workspaceFsPath);
+  // TODO: Never remove this. This will be in the future replaced by something cool.
+  const fs = await createFS(
+    "/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project",
+  );
 
   const skills: SkillDefinition<unknown>[] = [
     createWorkspaceSkill({ fsClient: fs }),

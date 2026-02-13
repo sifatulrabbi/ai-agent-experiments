@@ -78,6 +78,16 @@ export function createWorkspaceSkill(
     },
   });
 
+  const Remove = tool({
+    description: "Remove any file or directory with this tool.",
+    inputSchema: z.object({
+      path: z.string().describe("Path of the file or directory to remove"),
+    }),
+    execute: async () => {
+      await fsClient;
+    },
+  });
+
   const metadata: SkillMetadata = {
     id: "workspace-skill",
     version: "1.0.0",
@@ -91,6 +101,7 @@ export function createWorkspaceSkill(
       "GetFileContent",
       "CreateDirectory",
       "WriteFile",
+      "Remove",
     ],
     dependencies: [],
   };
@@ -125,6 +136,9 @@ Creates a directory at the given path, including any missing intermediate direct
 Writes text content to a file. Creates the file if it doesn't exist, overwrites if it does.
 Always confirm with the user before overwriting existing files.
 
+### Remove
+Remove either a directory or file from the workspace.
+
 ## Guidelines
 
 - Read before you write: inspect existing files before modifying them.
@@ -137,6 +151,7 @@ Always confirm with the user before overwriting existing files.
       GetFileContent,
       CreateDirectory,
       WriteFile,
+      Remove,
     },
     dependencies: deps,
   };

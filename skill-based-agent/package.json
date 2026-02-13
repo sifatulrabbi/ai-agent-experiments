@@ -1,15 +1,16 @@
 {
-  "name": "skill-based-agent-monorepo",
+  "name": "protean",
   "private": true,
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "start": "bun run --cwd apps/skill-based-agent start",
-    "typecheck": "bun run --cwd packages/protean typecheck && bun run --cwd apps/skill-based-agent typecheck",
-    "lint": "bun run --cwd packages/protean lint && bun run --cwd apps/skill-based-agent lint",
-    "test": "bun run --cwd apps/skill-based-agent test",
+    "start": "bun run --cwd apps/webapp start",
+    "dev": "bun run --cwd apps/webapp dev",
+    "typecheck": "bun run --cwd packages/protean typecheck && bun run --cwd apps/tui typecheck && bun run --cwd apps/webapp typecheck",
+    "lint": "bun run --cwd packages/protean lint && bun run --cwd apps/tui lint && bun run --cwd apps/webapp lint",
+    "test": "bun run --cwd apps/tui test",
     "test:integration": "bun run --cwd packages/protean test:integration"
   }
 }
