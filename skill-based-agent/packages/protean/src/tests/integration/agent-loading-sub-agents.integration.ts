@@ -1,7 +1,7 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import { type UIMessageChunk } from "ai";
 
-import { createAgent } from "../../orchestrator";
+import { createOrchestration } from "../../orchestration";
 import {
   createStubFs,
   createStubDocxService,
@@ -83,7 +83,7 @@ async function main(): Promise<void> {
 
   skills.push(subAgentSkill);
 
-  const agent = await createAgent(
+  const agent = await createOrchestration(
     {
       model: openrouter("moonshotai/kimi-k2.5", {
         reasoning: {

@@ -18,7 +18,7 @@ export interface OrchestratorConfig {
   }) => string;
 }
 
-export async function createAgent(
+export async function createOrchestration(
   cfg: OrchestratorConfig,
   logger: Logger,
 ): Promise<ToolLoopAgent> {

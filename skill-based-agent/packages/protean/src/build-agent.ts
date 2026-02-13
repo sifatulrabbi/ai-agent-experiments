@@ -1,5 +1,6 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
-import { createAgent } from "./orchestrator";
+import { resolve } from "node:path";
+import { createOrchestration } from "./orchestration";
 import { createFS } from "./services/fs";
 import { createSubAgent } from "./services/sub-agent";
 import { SkillDefinition } from "./skills/base";
@@ -17,9 +18,8 @@ import {
 } from "./services/stubs";
 
 export async function buildAgent() {
-  const fs = await createFS(
-    "/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project",
-  );
+  const workspaceFsPath = resolve(import.meta.dir, "../../../tmp/project");
+  const fs = await createFS(workspaceFsPath);
 
   const skills: SkillDefinition<unknown>[] = [
     createWorkspaceSkill({ fsClient: fs }),
@@ -35,7 +35,7 @@ export async function buildAgent() {
 
   skills.push(subAgentSkill);
 
-  return createAgent(
+  return createOrchestration(
     {
       model: openrouter("stepfun/step-3.5-flash:free", {
         reasoning: {

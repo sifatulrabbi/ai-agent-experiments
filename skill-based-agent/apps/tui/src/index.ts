@@ -4,14 +4,16 @@ import { createElement } from "react";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { buildAgent, formatChunk } from "@protean/protean";
 
-import { formatChunk } from "./utils";
 import { createFileMessageStore } from "./messages";
 import { TuiApp } from "./tui/app";
-import { buildAgent } from "./build-agent";
 
-const DEFAULT_HISTORY_PATH =
-  "/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/history.json";
+const DEFAULT_HISTORY_PATH = resolve(
+  import.meta.dir,
+  "../../../tmp/history.json",
+);
 
 interface CliOptions {
   useTui: boolean;

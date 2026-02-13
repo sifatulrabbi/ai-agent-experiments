@@ -13,8 +13,6 @@
     "declarationMap": true,
     "sourceMap": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
     "types": ["bun", "node"]
-  },
-  "exclude": ["src/bak"]
+  }
 }

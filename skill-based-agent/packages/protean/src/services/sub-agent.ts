@@ -1,5 +1,5 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
-import { createAgent } from "../orchestrator";
+import { createOrchestration } from "../orchestration";
 import { consoleLogger } from "../logger";
 import { buildSubAgentSystemPrompt } from "../prompts/sub-agent-prompt";
 import { SkillDefinition } from "../skills/base";
@@ -55,7 +55,7 @@ export async function createSubAgent(
 ): Promise<SubAgentService> {
   return {
     spawn: async (cfg: SubAgentConfig): Promise<SubAgentResult> => {
-      const agent = await createAgent(
+      const agent = await createOrchestration(
         {
           model: openrouter("stepfun/step-3.5-flash:free", {
             reasoning: {
