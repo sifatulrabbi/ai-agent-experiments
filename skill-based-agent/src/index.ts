@@ -42,7 +42,8 @@ async function main(): Promise<void> {
 
   const agent = await createAgent(
     {
-      model: openrouter("moonshotai/kimi-k2.5", {
+      // model: openrouter("x-ai/grok-code-fast-1", {
+      model: openrouter("stepfun/step-3.5-flash:free", {
         reasoning: {
           enabled: true,
           effort: "medium",

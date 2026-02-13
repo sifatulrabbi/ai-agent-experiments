@@ -57,7 +57,7 @@ export async function createSubAgent(
     spawn: async (cfg: SubAgentConfig): Promise<SubAgentResult> => {
       const agent = await createAgent(
         {
-          model: openrouter("moonshotai/kimi-k2.5", {
+          model: openrouter("stepfun/step-3.5-flash:free", {
             reasoning: {
               enabled: true,
               effort: "medium",
@@ -73,7 +73,12 @@ export async function createSubAgent(
       );
 
       const result = await agent.generate({
-        messages: [],
+        messages: [
+          {
+            role: "user",
+            content: `Your goal is:\n${cfg.goal}\n\nUse your skills to achieve the goals.`,
+          },
+        ],
       });
 
       return {
