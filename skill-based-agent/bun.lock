@@ -83,10 +83,64 @@
         "typescript": "^5",
       },
     },
+    "packages/logger": {
+      "name": "@protean/logger",
+      "devDependencies": {
+        "@types/bun": "^1.3.9",
+        "@types/node": "^25.2.3",
+        "typescript": "^5.9.3",
+      },
+    },
     "packages/protean": {
       "name": "@protean/protean",
       "dependencies": {
         "@openrouter/ai-sdk-provider": "^2.2.3",
+        "ai": "^6.0.78",
+        "zod": "^4.3.6",
+      },
+      "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "@types/bun": "^1.3.9",
+        "@types/node": "^25.2.3",
+        "@typescript-eslint/eslint-plugin": "^8.44.1",
+        "@typescript-eslint/parser": "^8.44.1",
+        "eslint": "^9.37.0",
+        "typescript": "^5.9.3",
+      },
+    },
+    "packages/skill": {
+      "name": "@protean/skill",
+      "dependencies": {
+        "@openrouter/ai-sdk-provider": "^2.2.3",
+        "@protean/logger": "workspace:*",
+        "ai": "^6.0.78",
+        "zod": "^4.3.6",
+      },
+      "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "@types/bun": "^1.3.9",
+        "@types/node": "^25.2.3",
+        "@typescript-eslint/eslint-plugin": "^8.44.1",
+        "@typescript-eslint/parser": "^8.44.1",
+        "eslint": "^9.37.0",
+        "typescript": "^5.9.3",
+      },
+    },
+    "packages/utils": {
+      "name": "@protean/utils",
+      "devDependencies": {
+        "@types/bun": "^1.3.9",
+        "@types/node": "^25.2.3",
+        "typescript": "^5.9.3",
+      },
+    },
+    "packages/workspace-skill": {
+      "name": "@protean/workspace-skill",
+      "dependencies": {
+        "@openrouter/ai-sdk-provider": "^2.2.3",
+        "@protean/logger": "workspace:*",
+        "@protean/skill": "workspace:*",
+        "@protean/utils": "workspace:*",
         "ai": "^6.0.78",
         "zod": "^4.3.6",
       },
@@ -528,11 +582,19 @@
 
     "@panva/hkdf": ["@panva/hkdf@1.2.1", "", {}, "sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw=="],
 
+    "@protean/logger": ["@protean/logger@workspace:packages/logger"],
+
     "@protean/protean": ["@protean/protean@workspace:packages/protean"],
+
+    "@protean/skill": ["@protean/skill@workspace:packages/skill"],
 
     "@protean/tui": ["@protean/tui@workspace:apps/tui"],
 
+    "@protean/utils": ["@protean/utils@workspace:packages/utils"],
+
     "@protean/webapp": ["@protean/webapp@workspace:apps/webapp"],
+
+    "@protean/workspace-skill": ["@protean/workspace-skill@workspace:packages/workspace-skill"],
 
     "@protobufjs/aspromise": ["@protobufjs/aspromise@1.1.2", "", {}, "sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ=="],
 
