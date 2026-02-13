@@ -1,64 +1,131 @@
-import { openrouter } from "@openrouter/ai-sdk-provider";
+import { type ModelMessage } from "ai";
+import { render } from "ink";
+import { createElement } from "react";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { type ModelMessage } from "ai";
+import { readFileSync } from "node:fs";
 
-import { createAgent } from "./orchestrator";
-import {
-  createStubDocxService,
-  createStubPptxService,
-  createStubXlsxService,
-} from "./services/stubs";
-import { createFS } from "./services/fs";
-import { createSubAgent } from "./services/sub-agent";
-import { createWorkspaceSkill } from "./skills/workspace";
-import { createDocxSkill } from "./skills/docx";
-import { createPptxSkill } from "./skills/pptx";
-import { createXlsxSkill } from "./skills/xlsx";
-import { consoleLogger } from "./logger";
-import { buildRootAgentPrompt } from "./prompts/root-agent-prompt";
-import { createSubAgentSkill } from "./skills/sub-agent";
 import { formatChunk } from "./utils";
-import { type SkillDefinition } from "./skills/base";
+import { createFileMessageStore } from "./messages";
+import { TuiApp } from "./tui/app";
+import { buildAgent } from "./build-agent";
 
-async function main(): Promise<void> {
-  const fs = await createFS(
-    "/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project",
-  );
+const DEFAULT_HISTORY_PATH =
+  "/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/history.json";
 
-  const skills: SkillDefinition<unknown>[] = [
-    createWorkspaceSkill({ fsClient: fs }),
-    createDocxSkill({ fsClient: fs, docxClient: createStubDocxService() }),
-    createPptxSkill({ fsClient: fs, pptxClient: createStubPptxService() }),
-    createXlsxSkill({ fsClient: fs, xlsxClient: createStubXlsxService() }),
-  ];
+interface CliOptions {
+  useTui: boolean;
+  historyPath: string;
+  debugStream: boolean;
+}
 
-  const subAgentSkill = createSubAgentSkill({
-    subAgentService: await createSubAgent(skills),
-    availableSkillIds: skills.map((s) => s.id),
-  });
+function parseBooleanFlag(
+  value: string | undefined,
+  defaultValue: boolean,
+): boolean {
+  if (value === undefined) {
+    return defaultValue;
+  }
 
-  skills.push(subAgentSkill);
+  const normalized = value.toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
 
-  const agent = await createAgent(
-    {
-      // model: openrouter("x-ai/grok-code-fast-1", {
-      model: openrouter("stepfun/step-3.5-flash:free", {
-        reasoning: {
-          enabled: true,
-          effort: "medium",
-        },
-      }),
-      skillsRegistry: skills,
-      instructionsBuilder: buildRootAgentPrompt,
-    },
-    consoleLogger,
-  );
+  return defaultValue;
+}
+
+function parseArgs(argv: string[]): CliOptions {
+  let useTui = true;
+  let historyPath = DEFAULT_HISTORY_PATH;
+  let debugStream = false;
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+
+    if (arg === "--no-tui") {
+      useTui = false;
+      continue;
+    }
+
+    if (arg.startsWith("--tui=")) {
+      useTui = parseBooleanFlag(arg.split("=")[1], true);
+      continue;
+    }
+
+    if (arg === "--tui") {
+      const next = argv[i + 1];
+      if (next && !next.startsWith("--")) {
+        useTui = parseBooleanFlag(next, true);
+        i += 1;
+      } else {
+        useTui = true;
+      }
+      continue;
+    }
+
+    if (arg.startsWith("--history=")) {
+      historyPath = arg.slice("--history=".length);
+      continue;
+    }
+
+    if (arg === "--history") {
+      const next = argv[i + 1];
+      if (next && !next.startsWith("--")) {
+        historyPath = next;
+        i += 1;
+      }
+      continue;
+    }
+
+    if (arg === "--debug-stream") {
+      debugStream = true;
+      continue;
+    }
+  }
+
+  return {
+    useTui,
+    historyPath,
+    debugStream,
+  };
+}
+
+async function runPlainMode(
+  agent: Awaited<ReturnType<typeof buildAgent>>,
+  history: ModelMessage[],
+  historyPath: string,
+): Promise<void> {
+  const messageStore = createFileMessageStore(historyPath);
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    const pipedText = readFileSync(0, "utf-8").trim();
+    if (!pipedText) {
+      return;
+    }
+
+    const messages = [
+      ...history,
+      { role: "user" as const, content: pipedText },
+    ];
+    const stream = await agent.stream({ messages });
+
+    for await (const chunk of stream.toUIMessageStream()) {
+      process.stdout.write(formatChunk(chunk));
+    }
+
+    const response = await stream.response;
+    await messageStore.save([...messages, ...response.messages]);
+    return;
+  }
 
   const rl = createInterface({ input, output });
-  const history: ModelMessage[] = [];
+  let workingHistory = [...history];
 
-  console.log('Interactive mode. Type "exit" to quit.\n');
+  console.log('Plain mode. Type "exit" to quit.\n');
 
   try {
     while (true) {
@@ -73,24 +140,49 @@ async function main(): Promise<void> {
         break;
       }
 
-      history.push({ role: "user", content: userText });
+      workingHistory.push({ role: "user", content: userText });
 
       const stream = await agent.stream({
-        messages: history,
+        messages: workingHistory,
       });
 
-      console.log("=== UIMessage Stream Events ===");
       for await (const chunk of stream.toUIMessageStream()) {
         process.stdout.write(formatChunk(chunk));
       }
       console.log("");
 
       const response = await stream.response;
-      history.push(...response.messages);
+      workingHistory.push(...response.messages);
+      await messageStore.save(workingHistory);
     }
   } finally {
     rl.close();
   }
+}
+
+async function main(): Promise<void> {
+  const options = parseArgs(process.argv.slice(2));
+  const messageStore = createFileMessageStore(options.historyPath);
+  const history = await messageStore.load();
+  const agent = await buildAgent();
+
+  const canUseTui = process.stdin.isTTY && process.stdout.isTTY;
+
+  if (options.useTui && canUseTui) {
+    const app = render(
+      createElement(TuiApp, {
+        agent,
+        messageStore,
+        initialMessages: history,
+        debugStreamDefault: options.debugStream,
+      }),
+    );
+
+    await app.waitUntilExit();
+    return;
+  }
+
+  await runPlainMode(agent, history, options.historyPath);
 }
 
 void main();

@@ -4,11 +4,11 @@ import tsPlugin from "@typescript-eslint/eslint-plugin";
 
 export default [
   {
-    ignores: ["node_modules", "tmp", "src/services/stubs.ts"],
+    ignores: ["node_modules", "tmp", "src/services/stubs.ts", "src/bak"],
   },
   js.configs.recommended,
   {
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
