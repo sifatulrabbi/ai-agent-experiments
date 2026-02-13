@@ -15,8 +15,8 @@ export interface SkillDefinition<D> {
   id: SkillId;
   metadata: SkillMetadata;
   frontmatter: string;
-  tools: Record<string, Tool>;
   instructions: string;
+  tools: { [k: string]: Tool };
   dependencies: D;
 }
 

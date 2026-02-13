@@ -8,11 +8,15 @@ import {
 } from "ai";
 import z from "zod";
 
-import { ToolCollisionError, UnknownSkillError, type AppError } from "./errors";
-import { type Logger, noopLogger } from "./logger";
-import { buildRootAgentPrompt } from "./prompts/root-agent-prompt";
-import { type SkillDefinition, type SkillId } from "./skills/base";
-import { resolveSkillLoadOrder } from "./skills/resolve-skill-dependencies";
+import {
+  ToolCollisionError,
+  UnknownSkillError,
+  type AppError,
+} from "../errors";
+import { type Logger, noopLogger } from "../logger";
+import { buildRootAgentPrompt } from "../prompts/root-agent-prompt";
+import { type SkillDefinition, type SkillId } from "../skills/base";
+import { resolveSkillLoadOrder } from "../skills/resolve-skill-dependencies";
 
 interface SkillLoadSuccess {
   ok: true;
@@ -172,12 +176,7 @@ export class AgentOrchestrator {
   }
 
   async run(opts: { messages: ModelMessage[] }): Promise<{
-    text: string;
-    responseMessages: ModelMessage[];
-    steps: Array<{
-      toolCalls: Array<{ toolName: string }>;
-      finishReason: string;
-    }>;
+    messages: ModelMessage[];
   }> {
     const agent = this.buildAgent();
     let stepCounter = 0;
@@ -194,9 +193,10 @@ export class AgentOrchestrator {
     });
 
     return {
-      text: result.text,
-      responseMessages: result.response.messages as ModelMessage[],
-      steps: result.steps,
+      messages: [
+        ...opts.messages,
+        ...result.response.messages,
+      ] as ModelMessage[],
     };
   }
 }

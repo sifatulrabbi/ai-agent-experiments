@@ -5,10 +5,9 @@ import { type OutputStrategy } from "../services/sub-agent";
  * Sub-agents get all their tools pre-loaded — no Skill tool needed.
  */
 export function buildSubAgentSystemPrompt(
-  skillInstructions: string[],
   outputStrategy: OutputStrategy,
   customSystemPrompt?: string,
-): string {
+) {
   let outputGuidance: string;
   switch (outputStrategy) {
     case "string":
@@ -25,9 +24,14 @@ export function buildSubAgentSystemPrompt(
       break;
   }
 
-  const instructionBlock = skillInstructions.join("\n\n---\n\n");
+  return (cfg: {
+    skillFrontmatters: { id: string; frontmatter: string }[];
+  }) => {
+    const skillBlock = cfg.skillFrontmatters
+      .map((s) => `<skill id="${s.id}">\n${s.frontmatter}\n</skill>`)
+      .join("\n\n");
 
-  return `You are a focused sub-agent. You have a single task to accomplish. Complete it using the tools available to you, then respond with your result.
+    return `You are a focused sub-agent. You have a single task to accomplish. Complete it using the tools available to you, then respond with your result.
 
 # Output Strategy
 ${outputGuidance}
@@ -40,5 +44,7 @@ ${customSystemPrompt}`
 }
 
 # Capability Instructions
-${instructionBlock}`;
+You must use the following skills to achieve the given goal.
+${skillBlock}`;
+  };
 }

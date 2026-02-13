@@ -1,15 +1,15 @@
 import { generateText, stepCountIs, type Tool, type LanguageModel } from "ai";
 
-import { ToolCollisionError } from "./errors";
-import { type Logger, noopLogger } from "./logger";
-import { buildSubAgentSystemPrompt } from "./prompts/sub-agent-prompt";
+import { ToolCollisionError } from "../errors";
+import { type Logger, noopLogger } from "../logger";
+import { buildSubAgentSystemPrompt } from "../prompts/sub-agent-prompt";
 import {
   type SubAgentService,
   type SubAgentConfig,
   type SubAgentResult,
-} from "./services/sub-agent";
-import { type SkillDefinition, type SkillId } from "./skills/base";
-import { resolveSkillLoadOrder } from "./skills/resolve-skill-dependencies";
+} from "../services/sub-agent";
+import { type SkillDefinition, type SkillId } from "../skills/base";
+import { resolveSkillLoadOrder } from "../skills/resolve-skill-dependencies";
 
 export interface SubAgentOrchestratorConfig {
   skills: SkillDefinition<unknown>[];

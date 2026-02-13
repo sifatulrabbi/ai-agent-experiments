@@ -1,15 +1,12 @@
-interface SkillFrontmatter {
-  id: string;
-  frontmatter: string;
-}
-
 /**
  * Builds the root agent system prompt.
  * Only skill IDs and frontmatters are included — the agent must call
  * Skill(id) to load full instructions and tools for a given skill.
  */
-export function buildRootAgentPrompt(skills: SkillFrontmatter[]): string {
-  const skillBlock = skills
+export function buildRootAgentPrompt(cfg: {
+  skillFrontmatters: { id: string; frontmatter: string }[];
+}): string {
+  const skillBlock = cfg.skillFrontmatters
     .map((s) => `<skill id="${s.id}">\n${s.frontmatter}\n</skill>`)
     .join("\n\n");
 

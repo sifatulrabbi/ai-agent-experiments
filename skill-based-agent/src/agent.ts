@@ -2,8 +2,8 @@ import { openai } from "@ai-sdk/openai";
 import { type LanguageModel, type ModelMessage } from "ai";
 
 import { type Logger, noopLogger } from "./logger";
-import { AgentOrchestrator } from "./orchestrator";
-import { createSubAgentOrchestrator } from "./sub-agent-orchestrator";
+import { AgentOrchestrator } from "./bak/orchestrator";
+import { createSubAgentOrchestrator } from "./bak/sub-agent-orchestrator";
 import { type DocxService } from "./services/docx";
 import { type FS } from "./services/fs";
 import { type PptxService } from "./services/pptx";
@@ -103,7 +103,6 @@ export function buildAgentApp(config: BuildAgentAppConfig = {}) {
     orchestrator,
     services,
     skills: [...baseSkills, subAgentSkill],
-    run: async (messages: ModelMessage[]) =>
-      orchestrator.run({ messages }),
+    run: (messages: ModelMessage[]) => orchestrator.run({ messages }),
   };
 }

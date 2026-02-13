@@ -68,12 +68,9 @@ export function createSubAgentSkill(
       });
 
       return {
-        goal,
-        skillIds,
-        outputStrategy,
+        status: "done",
         output: result.output,
         outputPath: result.outputPath,
-        status: "ok",
       };
     },
   });
@@ -84,7 +81,7 @@ export function createSubAgentSkill(
     description:
       "Spawn independent sub-agents that run to completion with a focused goal and a chosen set of skills. Use for parallel work, deep dives, or delegating self-contained subtasks.",
     useWhen:
-      "The task benefits from parallelism (multiple files to process), a subtask is self-contained and can run independently, or you want to offload a deep exploration without flooding your own context.",
+      "The task benefits from parallelism (multiple files to process, explore the workspace of the user to find specific information), a subtask is self-contained and can run independently, or you want to offload a deep exploration without flooding your own context.",
     toolNames: ["SpawnSubAgent"],
     dependencies: ["workspace-skill"],
   };
@@ -114,7 +111,7 @@ Parameters:
 ## When to Spawn Sub-agents
 
 - **Parallel compliance checks** - Spawn multiple sub-agents to review different sections of a document simultaneously.
-- **File exploration** - Launch a sub-agent with the workspace skill to scan a directory structure and summarize findings.
+- **File exploration** - Launch a sub-agent with the workspace skill to scan a directory and summarize findings. Tip, launch multiple at once for quick and more accurate results.
 - **Template evaluation** - Have a sub-agent generate a file from a template while the root agent continues other work.
 - **Document generation** - Delegate report or document creation to a sub-agent with the appropriate document skill.
 - **Focused analysis** - Spawn a sub-agent to deeply analyze a single file while the root agent handles the broader task.

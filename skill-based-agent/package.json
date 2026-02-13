@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.26",
-    "@langchain/openai": "^1.2.6",
+    "@openrouter/ai-sdk-provider": "^2.2.3",
     "ai": "^6.0.78",
     "zod": "^4.3.6"
   },
