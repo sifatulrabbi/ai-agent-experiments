@@ -42,12 +42,17 @@ async function main(): Promise<void> {
 
   const orchestrator = new AgentOrchestrator({
     skills: [...baseSkills, subAgentSkill],
+    model,
   });
 
   const result = await orchestrator.run({
-    model,
-    userMessage:
-      "Spawn a sub-agent to read /readme.md and summarize it. Use the string output strategy.",
+    messages: [
+      {
+        role: "user",
+        content:
+          "Spawn a sub-agent to read /readme.md and summarize it. Use the string output strategy.",
+      },
+    ],
   });
 
   console.log("\n--- Final Response ---");

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { tool } from "ai";
+import { tool, type LanguageModel } from "ai";
 import z from "zod";
 
 import { ToolCollisionError } from "../../errors";
@@ -9,6 +9,8 @@ import {
   type SkillMetadata,
   renderSkillFrontmatter,
 } from "../../skills/base";
+
+const fakeModel = {} as LanguageModel;
 
 function createSkill(
   id: string,
@@ -56,6 +58,7 @@ describe("AgentOrchestrator", () => {
 
     const orchestrator = new AgentOrchestrator({
       skills: [workspace, docx],
+      model: fakeModel,
     });
 
     expect(orchestrator.getActiveToolNames()).toEqual(["Skill"]);
@@ -78,6 +81,7 @@ describe("AgentOrchestrator", () => {
   test("returns structured error messages for unknown skills", () => {
     const orchestrator = new AgentOrchestrator({
       skills: [createSkill("workspace-skill", ["ReadDir"])],
+      model: fakeModel,
     });
 
     const result = orchestrator.loadSkill("missing-skill");
@@ -92,6 +96,7 @@ describe("AgentOrchestrator", () => {
             createSkill("a", ["SharedTool"]),
             createSkill("b", ["SharedTool"]),
           ],
+          model: fakeModel,
         }),
     ).toThrow(ToolCollisionError);
   });

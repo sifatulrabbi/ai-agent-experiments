@@ -1,9 +1,10 @@
 import {
   tool,
-  generateText,
+  ToolLoopAgent,
   stepCountIs,
   type Tool,
   type LanguageModel,
+  type ModelMessage,
 } from "ai";
 import z from "zod";
 
@@ -28,6 +29,7 @@ type SkillLoadResult = SkillLoadSuccess | SkillLoadFailure;
 
 export interface OrchestratorConfig {
   skills: SkillDefinition<unknown>[];
+  model: LanguageModel;
   logger?: Logger;
   maxSteps?: number;
 }
@@ -40,10 +42,12 @@ export class AgentOrchestrator {
   private readonly skillToolNames: Map<string, string[]> = new Map();
   private readonly logger: Logger;
   private readonly maxSteps: number;
+  private readonly model: LanguageModel;
 
   constructor(config: OrchestratorConfig) {
     this.logger = config.logger ?? noopLogger;
     this.maxSteps = config.maxSteps ?? 50;
+    this.model = config.model;
 
     for (const skill of config.skills) {
       this.skillRegistry.set(skill.id, skill);
@@ -153,25 +157,33 @@ export class AgentOrchestrator {
     return { Skill: SkillTool, ...this.allTools };
   }
 
-  async run(opts: { model: LanguageModel; userMessage: string }): Promise<{
+  private buildAgent(): ToolLoopAgent {
+    const tools = this.buildToolSet();
+
+    return new ToolLoopAgent({
+      model: this.model,
+      instructions: buildRootAgentPrompt(this.getSkillFrontmatters()),
+      tools,
+      prepareStep: async () => ({
+        activeTools: this.getActiveToolNames(),
+      }),
+      stopWhen: stepCountIs(this.maxSteps),
+    });
+  }
+
+  async run(opts: { messages: ModelMessage[] }): Promise<{
     text: string;
+    responseMessages: ModelMessage[];
     steps: Array<{
       toolCalls: Array<{ toolName: string }>;
       finishReason: string;
     }>;
   }> {
-    const tools = this.buildToolSet();
+    const agent = this.buildAgent();
     let stepCounter = 0;
 
-    const result = await generateText({
-      model: opts.model,
-      system: buildRootAgentPrompt(this.getSkillFrontmatters()),
-      tools,
-      prompt: opts.userMessage,
-      prepareStep: async () => ({
-        activeTools: this.getActiveToolNames(),
-      }),
-      stopWhen: stepCountIs(this.maxSteps),
+    const result = await agent.generate({
+      messages: opts.messages,
       onStepFinish: ({ toolCalls, finishReason }) => {
         const toolNames = toolCalls.map((tc) => tc.toolName);
         this.logger.info(
@@ -181,6 +193,10 @@ export class AgentOrchestrator {
       },
     });
 
-    return result;
+    return {
+      text: result.text,
+      responseMessages: result.response.messages as ModelMessage[],
+      steps: result.steps,
+    };
   }
 }

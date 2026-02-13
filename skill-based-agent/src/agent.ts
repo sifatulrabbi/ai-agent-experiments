@@ -1,5 +1,5 @@
 import { openai } from "@ai-sdk/openai";
-import { type LanguageModel } from "ai";
+import { type LanguageModel, type ModelMessage } from "ai";
 
 import { type Logger, noopLogger } from "./logger";
 import { AgentOrchestrator } from "./orchestrator";
@@ -94,6 +94,7 @@ export function buildAgentApp(config: BuildAgentAppConfig = {}) {
 
   const orchestrator = new AgentOrchestrator({
     skills: [...baseSkills, subAgentSkill],
+    model,
     logger,
     maxSteps: config.rootMaxSteps,
   });
@@ -102,10 +103,7 @@ export function buildAgentApp(config: BuildAgentAppConfig = {}) {
     orchestrator,
     services,
     skills: [...baseSkills, subAgentSkill],
-    run: async (userMessage: string) =>
-      orchestrator.run({
-        model,
-        userMessage,
-      }),
+    run: async (messages: ModelMessage[]) =>
+      orchestrator.run({ messages }),
   };
 }
