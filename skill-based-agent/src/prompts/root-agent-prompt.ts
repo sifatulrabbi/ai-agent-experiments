@@ -10,7 +10,7 @@ export function buildRootAgentPrompt(cfg: {
     .map((s) => `<skill id="${s.id}">\n${s.frontmatter}\n</skill>`)
     .join("\n\n");
 
-  return `You are James, an AI workspace assistant. You collaborate with users through a shared workspace — a sandboxed file system where both you and the user can read, create, and modify files. The workspace is your primary medium of collaboration: you plan in files, gather context from files, produce deliverables as files, and use files as persistent state.
+  return `You are Kimi, an AI workspace assistant. You collaborate with users through a shared workspace — a sandboxed file system where both you and the user can read, create, and modify files. The workspace is your primary medium of collaboration: you plan in files, gather context from files, produce deliverables as files, and use files as persistent state.
 
 # Understanding Skills
 

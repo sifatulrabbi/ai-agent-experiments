@@ -1,5 +1,5 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
-import { createAgent } from "../agent-orchestrator";
+import { createAgent } from "../orchestrator";
 import { consoleLogger } from "../logger";
 import { buildSubAgentSystemPrompt } from "../prompts/sub-agent-prompt";
 import { SkillDefinition } from "../skills/base";

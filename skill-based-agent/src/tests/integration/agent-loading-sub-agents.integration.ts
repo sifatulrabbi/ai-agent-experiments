@@ -1,7 +1,7 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import { type UIMessageChunk } from "ai";
 
-import { createAgent } from "../../agent-orchestrator";
+import { createAgent } from "../../orchestrator";
 import {
   createStubFs,
   createStubDocxService,
