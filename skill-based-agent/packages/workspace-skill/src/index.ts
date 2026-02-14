@@ -1,1 +1,1 @@
-export * from "./workspace-skill";
+export * from "./skill";

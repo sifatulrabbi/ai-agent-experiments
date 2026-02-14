@@ -1,4 +1,7 @@
-# Workspace Skill
+export const workspaceSkillDescription =
+  "Core filesystem skill. Read, write, and navigate files and directories in the sandboxed workspace. Any task that involves reading files, listing directories, creating files, or writing content. This is the foundational skill - most other skills depend on it.";
+
+export const workspaceSkillInstructions = `# Workspace Skill
 
 You have access to a sandboxed project workspace through the tools below.
 All paths are resolved relative to the workspace root unless an absolute path is given.
@@ -38,4 +41,4 @@ Remove either a directory or file from the workspace.
 - Read before you write: inspect existing files before modifying them.
 - Use GetFileStat to check size before reading large files.
 - Prefer ReadDir when you need to tell files from directories.
-- Never write to paths outside the workspace root.
+- Never write to paths outside the workspace root.`;

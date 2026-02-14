@@ -49,7 +49,10 @@ function resolveWithinRoot(root: string, inputPath: string): string {
 }
 
 // Root path: /Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project/
-export async function createLocalFs(rootPath: string, logger: Logger): Promise<FS> {
+export async function createLocalFs(
+  rootPath: string,
+  logger: Logger,
+): Promise<FS> {
   const root = resolve(rootPath);
 
   logger.info("Initializing local workspace FS", { rootPath: root });
