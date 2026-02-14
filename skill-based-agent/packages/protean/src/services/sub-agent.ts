@@ -2,7 +2,7 @@ import { openrouter } from "@openrouter/ai-sdk-provider";
 import { createOrchestration } from "../orchestration";
 import { consoleLogger } from "../logger";
 import { buildSubAgentSystemPrompt } from "../prompts/sub-agent-prompt";
-import { SkillDefinition } from "../skills/base";
+import { type Skill } from "@protean/skill";
 
 export type OutputStrategy = "string" | "workspace-file" | "tmp-file";
 
@@ -51,7 +51,7 @@ function extractOutputPathFromSteps(
 }
 
 export async function createSubAgent(
-  skillsRegistry: SkillDefinition<unknown>[],
+  skillsRegistry: Skill<unknown>[],
 ): Promise<SubAgentService> {
   return {
     spawn: async (cfg: SubAgentConfig): Promise<SubAgentResult> => {

@@ -7,12 +7,12 @@ import {
 } from "ai";
 import z from "zod";
 
-import { SkillDefinition } from "./skills/base";
+import { type Skill } from "@protean/skill";
 import { type Logger } from "./logger";
 
 export interface OrchestratorConfig {
   model: LanguageModel;
-  skillsRegistry: SkillDefinition<unknown>[];
+  skillsRegistry: Skill<unknown>[];
   instructionsBuilder: (cfg: {
     skillFrontmatters: { id: string; frontmatter: string }[];
   }) => string;

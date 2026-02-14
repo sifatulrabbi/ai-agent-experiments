@@ -1,22 +1,17 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import { type UIMessageChunk } from "ai";
+import { type Skill } from "@protean/skill";
+import { consoleLogger } from "@protean/logger";
+import { WorkspaceSkill } from "@protean/workspace-skill";
+import { DocxSkill, createStubDocxConverter } from "@protean/docx-skill";
+import { PptxSkill, createStubPptxConverter } from "@protean/pptx-skill";
+import { XlsxSkill, createStubXlsxConverter } from "@protean/xlsx-skill";
 
 import { createOrchestration } from "../../orchestration";
-import {
-  createStubFs,
-  createStubDocxService,
-  createStubPptxService,
-  createStubXlsxService,
-} from "../../services/stubs";
+import { createStubFs } from "../../services/stubs";
 import { createSubAgent } from "../../services/sub-agent";
-import { createWorkspaceSkill } from "../../skills/workspace";
-import { createDocxSkill } from "../../skills/docx";
-import { createPptxSkill } from "../../skills/pptx";
-import { createXlsxSkill } from "../../skills/xlsx";
-import { consoleLogger } from "../../logger";
+import { SubAgentSkill } from "../../skills/sub-agent";
 import { buildRootAgentPrompt } from "../../prompts/root-agent-prompt";
-import { createSubAgentSkill } from "../../skills/sub-agent";
-import { type SkillDefinition } from "../../skills/base";
 
 function formatChunk(chunk: UIMessageChunk): string {
   switch (chunk.type) {
@@ -69,16 +64,31 @@ async function main(): Promise<void> {
     "/docs/notes.md": "Some notes here.",
   });
 
-  const skills: SkillDefinition<unknown>[] = [
-    createWorkspaceSkill({ fsClient: fs }),
-    createDocxSkill({ fsClient: fs, docxClient: createStubDocxService() }),
-    createPptxSkill({ fsClient: fs, pptxClient: createStubPptxService() }),
-    createXlsxSkill({ fsClient: fs, xlsxClient: createStubXlsxService() }),
+  const logger = consoleLogger;
+
+  const skills: Skill<unknown>[] = [
+    new WorkspaceSkill({ fsClient: fs, logger }),
+    new DocxSkill({
+      fsClient: fs,
+      converter: createStubDocxConverter(fs, "/tmp/converted-docx-files/", logger),
+      logger,
+    }),
+    new PptxSkill({
+      fsClient: fs,
+      converter: createStubPptxConverter(fs, "/tmp/converted-pptx-files/", logger),
+      logger,
+    }),
+    new XlsxSkill({
+      fsClient: fs,
+      converter: createStubXlsxConverter(fs, "/tmp/converted-xlsx-files/", logger),
+      logger,
+    }),
   ];
 
-  const subAgentSkill = createSubAgentSkill({
+  const subAgentSkill = new SubAgentSkill({
     subAgentService: await createSubAgent(skills),
     availableSkillIds: skills.map((s) => s.id),
+    logger,
   });
 
   skills.push(subAgentSkill);
@@ -94,7 +104,7 @@ async function main(): Promise<void> {
       skillsRegistry: skills,
       instructionsBuilder: buildRootAgentPrompt,
     },
-    consoleLogger,
+    logger,
   );
 
   const stream = await agent.stream({

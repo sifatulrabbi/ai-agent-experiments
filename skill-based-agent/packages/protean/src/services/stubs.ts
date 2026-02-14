@@ -1,7 +1,4 @@
 import { type FS, type FileStat, type FileEntry } from "./fs";
-import { type DocxService } from "./docx";
-import { type PptxService } from "./pptx";
-import { type XlsxService } from "./xlsx";
 import { type SubAgentService } from "./sub-agent";
 
 /**
@@ -72,64 +69,6 @@ export function createStubFs(files: Record<string, string> = {}): FS {
 
     async remove(fullPath: string): Promise<void> {
       store.delete(fullPath);
-    },
-  };
-}
-
-export function createStubDocxService(): DocxService {
-  return {
-    async toMarkdown(_filePath: string): Promise<string> {
-      return "<!-- p_1 -->\n# Document Title\n\n<!-- p_2 -->\nThis is sample document content.";
-    },
-    async toImages(_filePath: string): Promise<string[]> {
-      return ["/tmp/converted-docx-files/sample/page-images/page-1.png"];
-    },
-    async modifyWithJson(
-      _filePath: string,
-      _modifications: unknown,
-    ): Promise<void> {
-      // no-op
-    },
-  };
-}
-
-export function createStubPptxService(): PptxService {
-  return {
-    async toMarkdown(_filePath: string): Promise<string> {
-      return "<!-- slide_1 -->\n# Slide 1 Title\n\n<!-- el_1 -->\nBullet point content";
-    },
-    async toImages(_filePath: string): Promise<string[]> {
-      return ["/tmp/converted-pptx-files/sample/slide-images/slide-1.png"];
-    },
-    async modifyWithJson(
-      _filePath: string,
-      _modifications: unknown,
-    ): Promise<void> {
-      // no-op
-    },
-  };
-}
-
-export function createStubXlsxService(): XlsxService {
-  return {
-    async toJsonl(_filePath: string) {
-      return {
-        workbook: {
-          fileName: "sample.xlsx",
-          sheetNames: ["Sheet1"],
-          totalSheets: 1,
-        },
-        sheets: {
-          Sheet1:
-            '{"row":1,"A":"Name","B":"Value"}\n{"row":2,"A":"Item1","B":"100"}',
-        },
-      };
-    },
-    async modifyWithJsonl(
-      _filePath: string,
-      _modifications: Record<string, string>,
-    ): Promise<void> {
-      // no-op
     },
   };
 }

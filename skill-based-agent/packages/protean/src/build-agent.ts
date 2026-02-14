@@ -1,20 +1,19 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
+import { type Skill } from "@protean/skill";
+import { consoleLogger } from "@protean/logger";
+import { WorkspaceSkill } from "@protean/workspace-skill";
+import { DocxSkill } from "@protean/docx-skill";
+import { createStubDocxConverter } from "@protean/docx-skill";
+import { PptxSkill } from "@protean/pptx-skill";
+import { createStubPptxConverter } from "@protean/pptx-skill";
+import { XlsxSkill } from "@protean/xlsx-skill";
+import { createStubXlsxConverter } from "@protean/xlsx-skill";
+
 import { createOrchestration } from "./orchestration";
 import { createFS } from "./services/fs";
 import { createSubAgent } from "./services/sub-agent";
-import { SkillDefinition } from "./skills/base";
-import { createDocxSkill } from "./skills/docx";
-import { createPptxSkill } from "./skills/pptx";
-import { createSubAgentSkill } from "./skills/sub-agent";
-import { createWorkspaceSkill } from "./skills/workspace";
-import { createXlsxSkill } from "./skills/xlsx";
-import { consoleLogger } from "./logger";
+import { SubAgentSkill } from "./skills/sub-agent";
 import { buildRootAgentPrompt } from "./prompts/root-agent-prompt";
-import {
-  createStubDocxService,
-  createStubPptxService,
-  createStubXlsxService,
-} from "./services/stubs";
 
 export async function buildAgent() {
   // TODO: Never remove this. This will be in the future replaced by something cool.
@@ -22,16 +21,31 @@ export async function buildAgent() {
     "/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project",
   );
 
-  const skills: SkillDefinition<unknown>[] = [
-    createWorkspaceSkill({ fsClient: fs }),
-    createDocxSkill({ fsClient: fs, docxClient: createStubDocxService() }),
-    createPptxSkill({ fsClient: fs, pptxClient: createStubPptxService() }),
-    createXlsxSkill({ fsClient: fs, xlsxClient: createStubXlsxService() }),
+  const logger = consoleLogger;
+
+  const skills: Skill<unknown>[] = [
+    new WorkspaceSkill({ fsClient: fs, logger }),
+    new DocxSkill({
+      fsClient: fs,
+      converter: createStubDocxConverter(fs, "/tmp/converted-docx-files/", logger),
+      logger,
+    }),
+    new PptxSkill({
+      fsClient: fs,
+      converter: createStubPptxConverter(fs, "/tmp/converted-pptx-files/", logger),
+      logger,
+    }),
+    new XlsxSkill({
+      fsClient: fs,
+      converter: createStubXlsxConverter(fs, "/tmp/converted-xlsx-files/", logger),
+      logger,
+    }),
   ];
 
-  const subAgentSkill = createSubAgentSkill({
+  const subAgentSkill = new SubAgentSkill({
     subAgentService: await createSubAgent(skills),
     availableSkillIds: skills.map((s) => s.id),
+    logger,
   });
 
   skills.push(subAgentSkill);
@@ -47,6 +61,6 @@ export async function buildAgent() {
       skillsRegistry: skills,
       instructionsBuilder: buildRootAgentPrompt,
     },
-    consoleLogger,
+    logger,
   );
 }
