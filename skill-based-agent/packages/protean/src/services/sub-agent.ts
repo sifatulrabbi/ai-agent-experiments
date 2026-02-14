@@ -1,8 +1,9 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
+import { type Skill } from "@protean/skill";
+
 import { createOrchestration } from "../orchestration";
 import { consoleLogger } from "../logger";
 import { buildSubAgentSystemPrompt } from "../prompts/sub-agent-prompt";
-import { type Skill } from "@protean/skill";
 
 export type OutputStrategy = "string" | "workspace-file" | "tmp-file";
 

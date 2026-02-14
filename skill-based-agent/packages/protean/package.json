@@ -11,7 +11,9 @@
     }
   },
   "scripts": {
+    "build": "echo 'No build step'",
     "typecheck": "bunx tsc --noEmit",
+    "test": "bun run test:integration",
     "lint": "bunx eslint . --ext .ts",
     "test:integration": "bun src/tests/integration/agent-loading-sub-agents.integration.ts"
   },

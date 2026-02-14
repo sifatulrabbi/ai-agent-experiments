@@ -70,17 +70,29 @@ async function main(): Promise<void> {
     new WorkspaceSkill({ fsClient: fs, logger }),
     new DocxSkill({
       fsClient: fs,
-      converter: createStubDocxConverter(fs, "/tmp/converted-docx-files/", logger),
+      converter: createStubDocxConverter(
+        fs,
+        "/tmp/converted-docx-files/",
+        logger,
+      ),
       logger,
     }),
     new PptxSkill({
       fsClient: fs,
-      converter: createStubPptxConverter(fs, "/tmp/converted-pptx-files/", logger),
+      converter: createStubPptxConverter(
+        fs,
+        "/tmp/converted-pptx-files/",
+        logger,
+      ),
       logger,
     }),
     new XlsxSkill({
       fsClient: fs,
-      converter: createStubXlsxConverter(fs, "/tmp/converted-xlsx-files/", logger),
+      converter: createStubXlsxConverter(
+        fs,
+        "/tmp/converted-xlsx-files/",
+        logger,
+      ),
       logger,
     }),
   ];

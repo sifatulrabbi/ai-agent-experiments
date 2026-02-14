@@ -14,20 +14,16 @@ describe("createTuiStore", () => {
     store
       .getState()
       .applyChunk({ type: "text-start", id: "t1" } as UIMessageChunk);
-    store
-      .getState()
-      .applyChunk({
-        type: "text-delta",
-        id: "t1",
-        delta: "Hi",
-      } as UIMessageChunk);
-    store
-      .getState()
-      .applyChunk({
-        type: "text-delta",
-        id: "t1",
-        delta: " there",
-      } as UIMessageChunk);
+    store.getState().applyChunk({
+      type: "text-delta",
+      id: "t1",
+      delta: "Hi",
+    } as UIMessageChunk);
+    store.getState().applyChunk({
+      type: "text-delta",
+      id: "t1",
+      delta: " there",
+    } as UIMessageChunk);
     store.getState().finishTurn([{ role: "assistant", content: "Hi there" }]);
 
     const state = store.getState();
@@ -44,23 +40,19 @@ describe("createTuiStore", () => {
     });
 
     for (let i = 0; i < 450; i += 1) {
-      store
-        .getState()
-        .applyChunk({
-          type: "text-delta",
-          id: "x",
-          delta: `part-${i}`,
-        } as UIMessageChunk);
+      store.getState().applyChunk({
+        type: "text-delta",
+        id: "x",
+        delta: `part-${i}`,
+      } as UIMessageChunk);
     }
 
     for (let i = 0; i < 220; i += 1) {
-      store
-        .getState()
-        .applyChunk({
-          type: "tool-input-start",
-          toolName: `tool-${i}`,
-          toolCallId: `call-${i}`,
-        } as UIMessageChunk);
+      store.getState().applyChunk({
+        type: "tool-input-start",
+        toolName: `tool-${i}`,
+        toolCallId: `call-${i}`,
+      } as UIMessageChunk);
     }
 
     const state = store.getState();

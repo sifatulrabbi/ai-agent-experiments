@@ -1,5 +1,5 @@
 export { createOrchestration } from "./orchestration";
-export { buildAgent } from "./build-agent";
+export { createRootAgent } from "./root-agent";
 export { formatChunk } from "./utils";
 
 export type { OrchestratorConfig } from "./orchestration";

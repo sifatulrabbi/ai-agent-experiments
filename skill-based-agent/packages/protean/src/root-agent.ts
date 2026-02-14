@@ -15,7 +15,7 @@ import { createSubAgent } from "./services/sub-agent";
 import { SubAgentSkill } from "./skills/sub-agent";
 import { buildRootAgentPrompt } from "./prompts/root-agent-prompt";
 
-export async function buildAgent() {
+export async function createRootAgent() {
   // TODO: Never remove this. This will be in the future replaced by something cool.
   const fs = await createFS(
     "/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project",
@@ -27,17 +27,29 @@ export async function buildAgent() {
     new WorkspaceSkill({ fsClient: fs, logger }),
     new DocxSkill({
       fsClient: fs,
-      converter: createStubDocxConverter(fs, "/tmp/converted-docx-files/", logger),
+      converter: createStubDocxConverter(
+        fs,
+        "/tmp/converted-docx-files/",
+        logger,
+      ),
       logger,
     }),
     new PptxSkill({
       fsClient: fs,
-      converter: createStubPptxConverter(fs, "/tmp/converted-pptx-files/", logger),
+      converter: createStubPptxConverter(
+        fs,
+        "/tmp/converted-pptx-files/",
+        logger,
+      ),
       logger,
     }),
     new XlsxSkill({
       fsClient: fs,
-      converter: createStubXlsxConverter(fs, "/tmp/converted-xlsx-files/", logger),
+      converter: createStubXlsxConverter(
+        fs,
+        "/tmp/converted-xlsx-files/",
+        logger,
+      ),
       logger,
     }),
   ];

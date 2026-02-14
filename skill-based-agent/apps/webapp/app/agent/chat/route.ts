@@ -1,5 +1,5 @@
 import { createAgentUIStreamResponse, type UIMessage } from "ai";
-import { buildAgent } from "@protean/protean";
+import { createRootAgent } from "@protean/protean";
 import { chatRepository } from "@/lib/server/chat-repository";
 import { requireUserId } from "@/lib/server/auth-user";
 import { DEFAULT_MODEL } from "@/lib/server/provider-factory";
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const agent = await buildAgent();
+  const agent = await createRootAgent();
 
   return createAgentUIStreamResponse({
     agent,

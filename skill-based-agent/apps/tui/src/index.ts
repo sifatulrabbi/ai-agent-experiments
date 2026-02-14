@@ -5,7 +5,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { buildAgent, formatChunk } from "@protean/protean";
+import { createRootAgent, formatChunk } from "@protean/protean";
 
 import { createFileMessageStore } from "./messages";
 import { TuiApp } from "./tui/app";
@@ -97,7 +97,7 @@ function parseArgs(argv: string[]): CliOptions {
 }
 
 async function runPlainMode(
-  agent: Awaited<ReturnType<typeof buildAgent>>,
+  agent: Awaited<ReturnType<typeof createRootAgent>>,
   history: ModelMessage[],
   historyPath: string,
 ): Promise<void> {
@@ -166,7 +166,7 @@ async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
   const messageStore = createFileMessageStore(options.historyPath);
   const history = await messageStore.load();
-  const agent = await buildAgent();
+  const agent = await createRootAgent();
 
   const canUseTui = process.stdin.isTTY && process.stdout.isTTY;
 

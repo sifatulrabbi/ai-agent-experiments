@@ -69,9 +69,7 @@ export class XlsxSkill extends Skill<XlsxSkillDeps> {
     description:
       "Apply JSONL modifications to an XLSX file. Each modification specifies a sheet, cell, value, and optional formula.",
     inputSchema: z.object({
-      xlsxPath: z
-        .string()
-        .describe("Path to the XLSX file to modify."),
+      xlsxPath: z.string().describe("Path to the XLSX file to modify."),
       modifications: z
         .array(
           z.object({

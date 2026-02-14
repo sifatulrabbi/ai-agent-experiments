@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "start": "bun src/index.ts --tui",
+    "build": "echo 'No build step'",
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test src/tests/unit",
     "test:integration": "bun run --cwd ../../packages/protean test:integration",

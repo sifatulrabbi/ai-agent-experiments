@@ -46,7 +46,12 @@ export function InspectorPane({ store }: InspectorPaneProps): ReactElement {
     return rows.length > 0 ? rows : [" "];
   };
 
-  type InspectorLine = { text: string; color?: ReturnType<typeof statusColor>; dim?: boolean; title?: boolean };
+  type InspectorLine = {
+    text: string;
+    color?: ReturnType<typeof statusColor>;
+    dim?: boolean;
+    title?: boolean;
+  };
   const lines: InspectorLine[] = [{ text: "Tool Calls", title: true }];
 
   if (toolEvents.length === 0) {

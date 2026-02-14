@@ -31,7 +31,8 @@ export async function POST(request: Request) {
       ? {
           providerId: body.modelSelection.providerId,
           modelId: body.modelSelection.modelId,
-          reasoningBudget: body.modelSelection.reasoningBudget as ReasoningBudget,
+          reasoningBudget: body.modelSelection
+            .reasoningBudget as ReasoningBudget,
         }
       : undefined;
 
