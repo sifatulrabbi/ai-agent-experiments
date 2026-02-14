@@ -1,7 +1,7 @@
-export const workspaceSkillDescription =
+export const description =
   "Core filesystem skill. Read, write, and navigate files and directories in the sandboxed workspace. Any task that involves reading files, listing directories, creating files, or writing content. This is the foundational skill - most other skills depend on it.";
 
-export const workspaceSkillInstructions = `# Workspace Skill
+export const instructions = `# Workspace Skill
 
 You have access to a sandboxed project workspace through the tools below.
 All paths are resolved relative to the workspace root unless an absolute path is given.

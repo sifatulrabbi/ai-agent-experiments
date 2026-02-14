@@ -17,6 +17,7 @@
   "dependencies": {
     "@openrouter/ai-sdk-provider": "^2.2.3",
     "@protean/logger": "workspace:*",
+    "@protean/vfs": "workspace:*",
     "@protean/skill": "workspace:*",
     "@protean/utils": "workspace:*",
     "ai": "^6.0.78",

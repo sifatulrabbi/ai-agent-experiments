@@ -3,9 +3,9 @@ import { z } from "zod";
 import { Skill } from "@protean/skill";
 import { type Logger } from "@protean/logger";
 import { tryCatch } from "@protean/utils";
+import { type FS } from "@protean/vfs";
 
-import { type FS } from "./fs";
-import { workspaceSkillInstructions } from "./instructions";
+import { description, instructions } from "./instructions";
 
 export interface WorkspaceSkillDeps {
   fsClient: FS;
@@ -17,8 +17,8 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
     super(
       {
         id: "workspace-skill",
-        description: "",
-        instructions: workspaceSkillInstructions,
+        description: description,
+        instructions: instructions,
         dependencies: dependencies,
       },
       dependencies.logger,
@@ -28,6 +28,7 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
   get tools() {
     return {
       GetFileStat: this.GetFileStat,
+      ReadDir: this.ReadDir,
       GetFileContent: this.GetFileContent,
       CreateDirectory: this.CreateDirectory,
       WriteFile: this.WriteFile,
@@ -37,7 +38,7 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
 
   GetFileStat = tool({
     description:
-      "Get metadata (size, type, timestamps) for a single file or directory.",
+      "Get metadata (size, type, timestamps) for a single file or directory. Includes totalLines for files.",
     inputSchema: z.object({
       fullPath: z
         .string()
@@ -48,9 +49,18 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
         'Running workspace operation "GetFileStat"',
         { path: fullPath },
       );
-      const { result, error } = await tryCatch(() =>
-        this.dependencies.fsClient.stat(fullPath),
-      );
+      const { result, error } = await tryCatch(async () => {
+        const stat = await this.dependencies.fsClient.stat(fullPath);
+        if (stat.isDirectory) {
+          return { ...stat, totalLines: null as number | null };
+        }
+
+        const content = await this.dependencies.fsClient.readFile(fullPath);
+        return {
+          ...stat,
+          totalLines: content.split("\n").length,
+        };
+      });
       if (error) {
         this.logger.error('Workspace operation "GetFileStat" failed', {
           path: fullPath,

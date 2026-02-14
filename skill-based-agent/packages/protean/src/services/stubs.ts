@@ -69,6 +69,10 @@ export function createStubFs(files: Record<string, string> = {}): FS {
     async writeFile(filePath: string, content: string): Promise<void> {
       store.set(filePath, content);
     },
+
+    async remove(fullPath: string): Promise<void> {
+      store.delete(fullPath);
+    },
   };
 }
 

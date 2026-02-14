@@ -2,25 +2,17 @@ import { describe, test, expect, beforeEach, afterAll } from "bun:test";
 import { mkdtemp, rm, readFile, writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { createLocalFs, type FS } from "./fs";
-
-const noopLogger = {
-  info: () => {},
-  debug: () => {},
-  warn: () => {},
-  error: () => {},
-} as any;
+import { createLocalFs, type FS } from "./index";
 
 let root: string;
 let fs: FS;
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "local-fs-test-"));
-  fs = await createLocalFs(root, noopLogger);
+  fs = await createLocalFs(root);
 });
 
 afterAll(async () => {
-  // cleanup temp dirs created during tests
   if (root) {
     await rm(root, { recursive: true, force: true }).catch(() => {});
   }
@@ -71,16 +63,8 @@ describe("createLocalFs", () => {
       const result = await fs.stat("stat-me.txt");
       expect(result.isDirectory).toBe(false);
       expect(result.size).toBeGreaterThan(0);
-      expect(result.totalLines).toBe(1);
       expect(result.modified).toBeTruthy();
       expect(result.created).toBeTruthy();
-    });
-
-    test("counts lines correctly", async () => {
-      await writeFile(join(root, "lines.txt"), "a\nb\nc\n", "utf8");
-
-      const result = await fs.stat("lines.txt");
-      expect(result.totalLines).toBe(4); // trailing newline produces empty last element
     });
 
     test("throws for non-existent path", async () => {
@@ -135,8 +119,14 @@ describe("createLocalFs", () => {
       expect(fs.readFile("to-delete.txt")).rejects.toThrow();
     });
 
+    test("removes a directory recursively", async () => {
+      await fs.writeFile("to-delete/sub/file.txt", "bye");
+      await fs.remove("to-delete");
+
+      expect(fs.readdir("to-delete")).rejects.toThrow();
+    });
+
     test("does not throw for non-existent file", async () => {
-      // remove uses exists() check, so this should be a no-op
       await fs.remove("already-gone.txt");
     });
   });
@@ -155,7 +145,6 @@ describe("createLocalFs", () => {
     });
 
     test("allows absolute-looking paths that resolve within root", async () => {
-      // "/hello.txt" gets the leading slash stripped, resolving to <root>/hello.txt
       await fs.writeFile("/hello.txt", "hi");
       const content = await fs.readFile("/hello.txt");
       expect(content).toBe("hi");
