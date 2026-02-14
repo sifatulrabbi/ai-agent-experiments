@@ -28,6 +28,10 @@ export class DocxSkill extends Skill<DocxSkillDeps> {
       },
       dependencies.logger,
     );
+
+    if (!this.dependencies.outputDir) {
+      this.dependencies.outputDir = DEFAULT_OUTPUT_DIR;
+    }
   }
 
   get tools() {
@@ -40,9 +44,13 @@ export class DocxSkill extends Skill<DocxSkillDeps> {
 
   DocxToMarkdown = tool({
     description:
-      "Convert a DOCX file to Markdown with element IDs (<!-- p_123 -->) for referencing in modifications.",
+      "Convert a DOCX file to structured Markdown. Parses headings, bold/italic/underline/strikethrough, hyperlinks, tables, and numbered/bullet lists. Each paragraph and table is tagged with a deterministic element ID comment (e.g. <!-- p_0 -->, <!-- tbl_0 -->) that can be used to target modifications with ModifyDocxWithJson. Returns the path to the generated .md file.",
     inputSchema: z.object({
-      docxPath: z.string().describe("Path to the DOCX file to convert."),
+      docxPath: z
+        .string()
+        .describe(
+          "Workspace-relative path to the .docx file (e.g. 'documents/report.docx').",
+        ),
     }),
     execute: async ({ docxPath }) => {
       this.logger.debug('Running docx operation "DocxToMarkdown"', {
@@ -68,9 +76,13 @@ export class DocxSkill extends Skill<DocxSkillDeps> {
 
   DocxToImages = tool({
     description:
-      "Convert all pages of a DOCX file to PNG images for visual inspection.",
+      "Render every page of a DOCX file as a high-resolution PNG image (via LibreOffice headless). Useful for verifying visual layout, table formatting, and content that Markdown cannot fully represent. Images are named page-1.png, page-2.png, etc. Requires LibreOffice to be installed.",
     inputSchema: z.object({
-      docxPath: z.string().describe("Path to the DOCX file to convert."),
+      docxPath: z
+        .string()
+        .describe(
+          "Workspace-relative path to the .docx file (e.g. 'documents/report.docx').",
+        ),
     }),
     execute: async ({ docxPath }) => {
       this.logger.debug('Running docx operation "DocxToImages"', {
@@ -96,27 +108,37 @@ export class DocxSkill extends Skill<DocxSkillDeps> {
 
   ModifyDocxWithJson = tool({
     description:
-      "Apply JSON modifications to a DOCX file. Each modification references an element ID and specifies an action.",
+      "Apply targeted modifications to a DOCX file using element IDs from DocxToMarkdown output. Supports replacing paragraph text (preserving original formatting like bold and heading style), deleting elements, and inserting new paragraphs before or after existing ones. Multiple modifications can be batched in a single call. Produces a new *-modified.docx file.",
     inputSchema: z.object({
-      docxPath: z.string().describe("Path to the DOCX file to modify."),
+      docxPath: z
+        .string()
+        .describe(
+          "Workspace-relative path to the .docx file to modify (e.g. 'documents/report.docx').",
+        ),
       modifications: z
         .array(
           z.object({
             elementId: z
               .string()
-              .describe('Element ID from Markdown output (e.g., "p_123").'),
+              .describe(
+                "Element ID from DocxToMarkdown output (e.g. 'p_0', 'tbl_0_r0_c0_p0'). See the Markdown HTML comments to find IDs.",
+              ),
             action: z
               .enum(["replace", "delete", "insertAfter", "insertBefore"])
-              .describe("The modification action to perform."),
+              .describe(
+                "Action to perform. 'replace' swaps the element's text content while preserving formatting. 'delete' removes the element entirely. 'insertAfter'/'insertBefore' adds a new plain paragraph adjacent to the target.",
+              ),
             content: z
               .string()
               .optional()
               .describe(
-                "New content for replace/insert actions. Not needed for delete.",
+                "The new plain text content. Required for replace, insertAfter, and insertBefore. Omit for delete.",
               ),
           }),
         )
-        .describe("Array of modifications to apply."),
+        .describe(
+          "Array of modifications to apply. Multiple modifications are processed safely regardless of order.",
+        ),
     }),
     execute: async ({ docxPath, modifications }) => {
       this.logger.debug('Running docx operation "ModifyDocxWithJson"', {

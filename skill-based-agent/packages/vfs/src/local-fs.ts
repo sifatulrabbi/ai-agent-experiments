@@ -52,6 +52,12 @@ export async function createLocalFs(
       return readFile(resolvedPath, "utf8");
     },
 
+    readFileBuffer: async (filePath) => {
+      logger?.debug("FS.readFileBuffer", { filePath });
+      const resolvedPath = resolveWithinRoot(root, filePath);
+      return readFile(resolvedPath);
+    },
+
     mkdir: async (dirPath) => {
       logger?.debug("FS.mkdir", { dirPath });
       const resolvedPath = resolveWithinRoot(root, dirPath);
@@ -70,6 +76,24 @@ export async function createLocalFs(
 
       await mkdir(parentPath, { recursive: true });
       await writeFile(resolvedPath, content, "utf8");
+    },
+
+    writeFileBuffer: async (filePath, content) => {
+      logger?.debug("FS.writeFileBuffer", { filePath, bytes: content.length });
+      const resolvedPath = resolveWithinRoot(root, filePath);
+      const parentPath = normalize(resolve(resolvedPath, ".."));
+      const rel = relative(root, parentPath);
+      const escapesRoot = rel.startsWith("..") || rel.includes(`..${sep}`);
+      if (escapesRoot) {
+        throw new Error(`Path "${filePath}" escapes workspace root.`);
+      }
+
+      await mkdir(parentPath, { recursive: true });
+      await writeFile(resolvedPath, content);
+    },
+
+    resolve: (filePath) => {
+      return resolveWithinRoot(root, filePath);
     },
 
     remove: async (fullPath) => {
