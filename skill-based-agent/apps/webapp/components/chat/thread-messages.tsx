@@ -34,7 +34,10 @@ import { Textarea } from "@/components/ui/textarea";
 
 interface ThreadMessagesProps {
   messages: UIMessage[];
-  onEditUserMessage: (payload: { messageId: string; text: string }) => Promise<void>;
+  onEditUserMessage: (payload: {
+    messageId: string;
+    text: string;
+  }) => Promise<void>;
   onRerunAssistantMessage: (payload: { messageId: string }) => Promise<void>;
   status: ThreadStatus;
   streamingLabel: string | null;
@@ -50,10 +53,10 @@ function getMessageText(message: UIMessage): string {
 
 export function ThreadMessages({
   messages,
-  onEditUserMessage,
-  onRerunAssistantMessage,
   status,
   streamingLabel,
+  onEditUserMessage,
+  onRerunAssistantMessage,
 }: ThreadMessagesProps) {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -73,7 +76,9 @@ export function ThreadMessages({
 
     setCopiedMessageId(message.id);
     setTimeout(() => {
-      setCopiedMessageId((current) => (current === message.id ? null : current));
+      setCopiedMessageId((current) =>
+        current === message.id ? null : current,
+      );
     }, 1500);
   }, []);
 
@@ -214,7 +219,7 @@ export function ThreadMessages({
         )}
 
         {streamingLabel ? (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <div className="flex items-center gap-2 font-(family-name:--font-literata) text-muted-foreground">
             <SparklesIcon className="size-4" />
             <Shimmer>{streamingLabel}</Shimmer>
           </div>

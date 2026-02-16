@@ -257,15 +257,12 @@ export const TerminalContent = ({
 
   return (
     <div
-      className={cn(
-        "max-h-96 overflow-auto p-4 font-mono text-sm leading-relaxed",
-        className,
-      )}
+      className={cn("max-h-96 overflow-auto p-4 font-mono text-sm", className)}
       ref={containerRef}
       {...props}
     >
       {children ?? (
-        <pre className="whitespace-pre-wrap break-words">
+        <pre className="whitespace-pre-wrap wrap-break-words">
           <Ansi>{output}</Ansi>
           {isStreaming && (
             <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-zinc-100" />

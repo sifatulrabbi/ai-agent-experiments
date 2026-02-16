@@ -124,6 +124,40 @@ export function ThreadPromptInput({
               </PopoverTrigger>
               <PopoverContent align="start" className="w-80 p-3">
                 <div className="space-y-2">
+                  <PromptActionRow label="Model">
+                    <ModelProviderDropdown
+                      disabled={disabled}
+                      onChange={onModelChange}
+                      providers={providers}
+                      value={modelSelection}
+                    />
+                  </PromptActionRow>
+
+                  {supportsThinking ? (
+                    <PromptActionRow label="Thinking">
+                      <Select
+                        onValueChange={(value) =>
+                          onThinkingBudgetChange(value as ReasoningBudget)
+                        }
+                        value={thinkingBudget}
+                      >
+                        <SelectTrigger className="h-8 gap-2 text-xs" size="sm">
+                          <BrainIcon className="size-3.5" />
+                          <SelectValue placeholder="Thinking" />
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          {availableReasoningBudgets.map((budget) => (
+                            <SelectItem key={budget} value={budget}>
+                              {budget === "none"
+                                ? "None"
+                                : `${budget[0]?.toUpperCase()}${budget.slice(1)}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </PromptActionRow>
+                  ) : null}
+
                   <PromptActionRow label="Attach files">
                     <Button disabled size="sm" type="button" variant="outline">
                       <PaperclipIcon className="size-4" />
@@ -145,36 +179,6 @@ export function ThreadPromptInput({
                 </div>
               </PopoverContent>
             </Popover>
-
-            <ModelProviderDropdown
-              disabled={disabled}
-              onChange={onModelChange}
-              providers={providers}
-              value={modelSelection}
-            />
-
-            {supportsThinking ? (
-              <Select
-                onValueChange={(value) =>
-                  onThinkingBudgetChange(value as ReasoningBudget)
-                }
-                value={thinkingBudget}
-              >
-                <SelectTrigger className="h-8 gap-2 text-xs" size="sm">
-                  <BrainIcon className="size-3.5" />
-                  <SelectValue placeholder="Thinking" />
-                </SelectTrigger>
-                <SelectContent align="start">
-                  {availableReasoningBudgets.map((budget) => (
-                    <SelectItem key={budget} value={budget}>
-                      {budget === "none"
-                        ? "Thinking: None"
-                        : `Thinking: ${budget[0]?.toUpperCase()}${budget.slice(1)}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
           </div>
 
           <PromptInputSubmit

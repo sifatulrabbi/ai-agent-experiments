@@ -74,7 +74,7 @@ export function ThreadsSidebar({
   );
 
   return (
-    <aside className="hidden h-screen w-72 flex-col border-r bg-muted/20 p-3 md:flex">
+    <aside className="hidden h-screen w-72 flex-col border-r border-sidebar-border bg-sidebar p-3 md:flex">
       <Button asChild className="w-full justify-start" size="sm">
         <Link href="/chats/new">
           <PlusIcon className="size-4" />
