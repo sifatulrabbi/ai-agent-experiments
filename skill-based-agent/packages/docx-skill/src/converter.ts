@@ -5,6 +5,7 @@ import { parseDocx } from "./lib/docx-parser";
 import { nodesToMarkdown } from "./lib/docx-to-markdown";
 import { applyModifications } from "./lib/docx-modifier";
 import { docxToImages } from "./lib/docx-to-images";
+import { generateDocxFromCode } from "./lib/docx-from-code";
 
 export interface DocxConvertResult {
   markdownPath: string;
@@ -23,6 +24,10 @@ export interface DocxModification {
   content?: string;
 }
 
+export interface DocxGenerateResult {
+  outputPath: string;
+}
+
 export interface DocxConverter {
   toMarkdown(docxPath: string): Promise<DocxConvertResult>;
   toImages(docxPath: string): Promise<DocxImagesToResult>;
@@ -30,6 +35,10 @@ export interface DocxConverter {
     docxPath: string,
     modifications: DocxModification[],
   ): Promise<{ outputPath: string }>;
+  generateFromCode(
+    code: string,
+    outputPath: string,
+  ): Promise<DocxGenerateResult>;
 }
 
 export function createDocxConverter(
@@ -96,6 +105,18 @@ export function createDocxConverter(
       logger.debug("DocxConverter.modify complete", { outputPath: outPath });
       return { outputPath: outPath };
     },
+
+    async generateFromCode(
+      code: string,
+      outputPath: string,
+    ): Promise<DocxGenerateResult> {
+      logger.debug("DocxConverter.generateFromCode", { outputPath });
+      const result = await generateDocxFromCode(code, outputPath, fsClient);
+      logger.debug("DocxConverter.generateFromCode complete", {
+        outputPath: result.outputPath,
+      });
+      return result;
+    },
   };
 }
 
@@ -114,6 +135,9 @@ export function createStubDocxConverter(
     },
     modify: async () => {
       throw new Error("DocxConverter.modify is not implemented");
+    },
+    generateFromCode: async () => {
+      throw new Error("DocxConverter.generateFromCode is not implemented");
     },
   };
 }

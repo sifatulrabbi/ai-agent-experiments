@@ -9,6 +9,7 @@ import z from "zod";
 import { type Skill } from "@protean/skill";
 
 import { type Logger } from "./logger";
+import assert from "node:assert";
 
 export interface OrchestratorConfig {
   model: LanguageModel;
@@ -16,6 +17,7 @@ export interface OrchestratorConfig {
   instructionsBuilder: (cfg: {
     skillFrontmatters: { id: string; frontmatter: string }[];
   }) => string;
+  tools?: { [k: string]: Tool };
 }
 
 export async function createOrchestration(
@@ -27,6 +29,15 @@ export async function createOrchestration(
   );
   const activeSkillIds = new Set<string>();
   const allTools: { [k: string]: Tool } = {};
+  const alwaysActiveTools: string[] = [];
+
+  if (cfg.tools) {
+    Object.keys(cfg.tools).forEach((toolName) => {
+      assert(cfg.tools, "cfg.tools should be defined");
+      allTools[toolName] = cfg.tools[toolName];
+      alwaysActiveTools.push(toolName);
+    });
+  }
 
   skillsRegistry.forEach((s) => {
     Object.keys(s.tools).forEach((toolName) => {
@@ -86,6 +97,7 @@ export async function createOrchestration(
   });
 
   allTools["Skill"] = skillTool;
+  alwaysActiveTools.push("Skill");
 
   const agent = new ToolLoopAgent({
     model: cfg.model,
@@ -99,7 +111,7 @@ export async function createOrchestration(
     tools: allTools,
     stopWhen: stepCountIs(50),
     prepareStep: async () => {
-      const activeTools = ["Skill"];
+      const activeTools = alwaysActiveTools.slice();
 
       for (const id of activeSkillIds) {
         const skill = skillsRegistry.get(id);

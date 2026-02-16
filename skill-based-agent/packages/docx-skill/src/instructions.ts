@@ -11,6 +11,7 @@ You have tools to read, visualize, and surgically edit Word (.docx) documents wi
 - **Assign element IDs** — every paragraph and table gets a deterministic ID (e.g. \`p_0\`, \`p_1\`, \`tbl_0\`, \`tbl_0_r0_c0_p0\`) embedded as HTML comments in the Markdown output.
 - **Render pages** as high-resolution PNG images for visual layout verification.
 - **Modify** the original DOCX by referencing element IDs — replace text, delete elements, or insert new paragraphs before/after existing ones. Formatting (bold, heading style, etc.) is preserved on replace.
+- **Generate** new DOCX files from scratch using docxjs code — create reports, letters, and complex documents programmatically.
 
 ## Workflow
 
@@ -42,6 +43,26 @@ Converts every page of a DOCX to a PNG image (via LibreOffice headless + PDF int
 
 **Requires**: LibreOffice installed on the system.
 **Returns**: \`pages\` (array of image paths), \`imageDir\`, and \`outputDir\`.
+
+### GenerateDocxFromCode
+Generate a new DOCX file from scratch by writing docxjs code. Your code must define a \`doc\` variable (a \`docx.Document\` instance). All \`docx\` package exports are pre-imported — use \`Document\`, \`Paragraph\`, \`TextRun\`, \`HeadingLevel\`, \`Table\`, \`TableRow\`, \`TableCell\`, etc. directly.
+
+**Example:**
+\`\`\`typescript
+const doc = new Document({
+  sections: [{
+    children: [
+      new Paragraph({
+        children: [new TextRun({ text: "Quarterly Report", bold: true })],
+        heading: HeadingLevel.HEADING_1,
+      }),
+      new Paragraph({ children: [new TextRun("Revenue increased by 15%.")] }),
+    ],
+  }],
+});
+\`\`\`
+
+**Returns**: \`outputPath\` (path to the generated DOCX file).
 
 ### ModifyDocxWithJson
 Applies an array of modifications to a DOCX file. Each modification has:

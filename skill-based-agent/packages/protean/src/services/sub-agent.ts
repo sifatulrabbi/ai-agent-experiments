@@ -1,8 +1,8 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import { type Skill } from "@protean/skill";
+import { type Logger } from "@protean/logger";
 
 import { createOrchestration } from "../orchestration";
-import { consoleLogger } from "../logger";
 import { buildSubAgentSystemPrompt } from "../prompts/sub-agent-prompt";
 
 export type OutputStrategy = "string" | "workspace-file" | "tmp-file";
@@ -53,12 +53,14 @@ function extractOutputPathFromSteps(
 
 export async function createSubAgent(
   skillsRegistry: Skill<unknown>[],
+  logger: Logger,
 ): Promise<SubAgentService> {
   return {
     spawn: async (cfg: SubAgentConfig): Promise<SubAgentResult> => {
       const agent = await createOrchestration(
         {
-          model: openrouter("stepfun/step-3.5-flash:free", {
+          // model: openrouter("stepfun/step-3.5-flash:free", {
+          model: openrouter("moonshotai/kimi-k2.5", {
             reasoning: {
               enabled: true,
               effort: "medium",
@@ -70,14 +72,14 @@ export async function createSubAgent(
           ),
           skillsRegistry,
         },
-        consoleLogger,
+        logger,
       );
 
       const result = await agent.generate({
         messages: [
           {
             role: "user",
-            content: `Your goal is:\n${cfg.goal}\n\nUse your skills to achieve the goals.`,
+            content: `${cfg.goal}\n\n_Use your skills to complete the tasks._`,
           },
         ],
       });

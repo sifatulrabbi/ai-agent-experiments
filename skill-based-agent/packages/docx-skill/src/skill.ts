@@ -39,6 +39,7 @@ export class DocxSkill extends Skill<DocxSkillDeps> {
       DocxToMarkdown: this.DocxToMarkdown,
       DocxToImages: this.DocxToImages,
       ModifyDocxWithJson: this.ModifyDocxWithJson,
+      GenerateDocxFromCode: this.GenerateDocxFromCode,
     };
   }
 
@@ -103,6 +104,43 @@ export class DocxSkill extends Skill<DocxSkillDeps> {
       }
 
       return { error: null, docxPath, ...result };
+    },
+  });
+
+  GenerateDocxFromCode = tool({
+    description:
+      "Generate a new DOCX file from docxjs code. Write TypeScript code that defines a `doc` variable (a docx.Document instance). The docx package is pre-imported — use Document, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, and other docx exports directly. The tool executes the code, packs the document, and writes the .docx file to the specified output path.",
+    inputSchema: z.object({
+      code: z
+        .string()
+        .describe(
+          "TypeScript code using the docx library that defines a `doc` variable (a docx.Document instance). All docx exports are available as globals.",
+        ),
+      outputPath: z
+        .string()
+        .describe(
+          "Workspace-relative path for the output .docx file (e.g. 'reports/quarterly.docx').",
+        ),
+    }),
+    execute: async ({ code, outputPath }) => {
+      this.logger.debug('Running docx operation "GenerateDocxFromCode"', {
+        outputPath,
+      });
+      const { result, error } = await tryCatch(() =>
+        this.dependencies.converter.generateFromCode(code, outputPath),
+      );
+      if (error) {
+        this.logger.error('Docx operation "GenerateDocxFromCode" failed', {
+          outputPath,
+          error,
+        });
+        return {
+          error: `Docx operation "GenerateDocxFromCode" failed for path "${outputPath}": ${error.message || "Unknown error"}`,
+          outputPath,
+        };
+      }
+
+      return { error: null, ...result };
     },
   });
 

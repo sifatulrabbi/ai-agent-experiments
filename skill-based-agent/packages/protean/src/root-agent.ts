@@ -2,8 +2,7 @@ import { openrouter } from "@openrouter/ai-sdk-provider";
 import { type Skill } from "@protean/skill";
 import { consoleLogger } from "@protean/logger";
 import { WorkspaceSkill } from "@protean/workspace-skill";
-import { DocxSkill } from "@protean/docx-skill";
-import { createStubDocxConverter } from "@protean/docx-skill";
+import { createDocxConverter, DocxSkill } from "@protean/docx-skill";
 import { PptxSkill } from "@protean/pptx-skill";
 import { createStubPptxConverter } from "@protean/pptx-skill";
 import { XlsxSkill } from "@protean/xlsx-skill";
@@ -12,8 +11,9 @@ import { createStubXlsxConverter } from "@protean/xlsx-skill";
 import { createOrchestration } from "./orchestration";
 import { createFS } from "./services/fs";
 import { createSubAgent } from "./services/sub-agent";
-import { SubAgentSkill } from "./skills/sub-agent";
 import { buildRootAgentPrompt } from "./prompts/root-agent-prompt";
+import { tool } from "ai";
+import z from "zod";
 
 export async function createRootAgent() {
   // TODO: Never remove this. This will be in the future replaced by something cool.
@@ -27,11 +27,7 @@ export async function createRootAgent() {
     new WorkspaceSkill({ fsClient: fs, logger }),
     new DocxSkill({
       fsClient: fs,
-      converter: createStubDocxConverter(
-        fs,
-        "/tmp/converted-docx-files/",
-        logger,
-      ),
+      converter: createDocxConverter(fs, "/tmp/converted-docx-files/", logger),
       logger,
     }),
     new PptxSkill({
@@ -54,24 +50,56 @@ export async function createRootAgent() {
     }),
   ];
 
-  const subAgentSkill = new SubAgentSkill({
-    subAgentService: await createSubAgent(skills),
-    availableSkillIds: skills.map((s) => s.id),
-    logger,
-  });
-
-  skills.push(subAgentSkill);
+  const subAgentService = await createSubAgent(skills, logger);
+  const subAgentTools = {
+    SpawnSubAgent: tool({
+      description:
+        "Launch a focused sub-agent with a specific set of skills to accomplish a goal. Sub-agents run independently and return their output when finished.",
+      inputSchema: z.object({
+        skillIds: z
+          .array(z.string())
+          .describe("Which skills the sub-agent should have access to."),
+        goal: z
+          .string()
+          .describe("The focused task for the sub-agent to accomplish."),
+        systemPrompt: z
+          .string()
+          .optional()
+          .describe(
+            "Optional custom system prompt override for the sub-agent.",
+          ),
+        outputStrategy: z
+          .enum(["string", "workspace-file", "tmp-file"])
+          .describe("How the sub-agent should return its output."),
+      }),
+      execute: async (args) => {
+        const result = await subAgentService.spawn({
+          skillIds: args.skillIds,
+          goal: args.goal,
+          systemPrompt: args.systemPrompt,
+          outputStrategy: args.outputStrategy,
+        });
+        return {
+          status: "done",
+          output: result.output,
+          outputPath: result.outputPath,
+        };
+      },
+    }),
+  };
 
   return createOrchestration(
     {
-      model: openrouter("stepfun/step-3.5-flash:free", {
+      // model: openrouter("stepfun/step-3.5-flash:free", {
+      model: openrouter("moonshotai/kimi-k2.5", {
         reasoning: {
           enabled: true,
           effort: "medium",
         },
       }),
-      skillsRegistry: skills,
       instructionsBuilder: buildRootAgentPrompt,
+      skillsRegistry: skills,
+      tools: { ...subAgentTools },
     },
     logger,
   );
