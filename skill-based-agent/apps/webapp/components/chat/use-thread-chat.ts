@@ -13,10 +13,23 @@ import { useThreadUiStore } from "@/components/chat/thread-ui-store";
 import type { ThreadStatus } from "@/components/chat/thread-ui-shared";
 import type { ThreadModelSelection } from "@/lib/server/chat-repository";
 
+function isPendingMessage(message: UIMessage): boolean {
+  const metadata = (
+    message as UIMessage & {
+      metadata?: unknown;
+    }
+  ).metadata;
+
+  if (!metadata || typeof metadata !== "object") {
+    return false;
+  }
+
+  return (metadata as Record<string, unknown>).pending === true;
+}
+
 interface UseThreadChatArgs {
   initialMessages: UIMessage[];
   initialModelSelection?: ThreadModelSelection;
-  initialPrompt?: string;
   initialThreadId?: string;
 }
 
@@ -41,7 +54,6 @@ interface UseThreadChatResult {
 export function useThreadChat({
   initialMessages,
   initialModelSelection,
-  initialPrompt,
   initialThreadId,
 }: UseThreadChatArgs): UseThreadChatResult {
   const router = useRouter();
@@ -57,7 +69,6 @@ export function useThreadChat({
   const hydrateFromRoute = useThreadUiStore((state) => state.hydrateFromRoute);
 
   const threadIdRef = useRef<string | null>(initialThreadId ?? null);
-  const hasAutoSentInitialPrompt = useRef(false);
 
   useEffect(() => {
     hydrateFromRoute({
@@ -66,7 +77,6 @@ export function useThreadChat({
     });
 
     threadIdRef.current = initialThreadId ?? null;
-    hasAutoSentInitialPrompt.current = false;
   }, [hydrateFromRoute, initialModelSelection, initialThreadId]);
 
   const selectedProviderRef = useRef(selectedProviderId);
@@ -133,41 +143,39 @@ export function useThreadChat({
     [],
   );
 
+  const pendingPromptHandledThreadsRef = useRef(new Set<string>());
+
   const { error, messages, sendMessage, status, stop } = useChat({
     messages: initialMessages,
     transport,
   });
 
   useEffect(() => {
-    if (
-      !initialPrompt ||
-      hasAutoSentInitialPrompt.current ||
-      !threadIdRef.current
-    ) {
-      return;
-    }
+    if (!initialThreadId) return;
+    if (pendingPromptHandledThreadsRef.current.has(initialThreadId)) return;
+    const hasPendingMessage = initialMessages.some(
+      (message) => message.role === "user" && isPendingMessage(message),
+    );
+    if (!hasPendingMessage) return;
 
-    const trimmedPrompt = initialPrompt.trim();
-    if (!trimmedPrompt) {
-      return;
-    }
+    pendingPromptHandledThreadsRef.current.add(initialThreadId);
 
-    hasAutoSentInitialPrompt.current = true;
     void (async () => {
-      const sendPromise = sendMessage({ text: trimmedPrompt });
-
-      if (typeof window !== "undefined") {
-        window.history.replaceState(
-          window.history.state,
-          "",
-          `/chats/t/${threadIdRef.current}`,
-        );
+      try {
+        await sendMessage(undefined, {
+          body: { invokePending: true },
+        });
+        refreshSidebar();
+      } catch {
+        pendingPromptHandledThreadsRef.current.delete(initialThreadId);
       }
-
-      await sendPromise;
-      refreshSidebar();
     })();
-  }, [initialPrompt, refreshSidebar, sendMessage]);
+  }, [
+    initialMessages,
+    initialThreadId,
+    refreshSidebar,
+    sendMessage,
+  ]);
 
   const handleSubmit = useCallback(
     async ({ text }: { text: string }) => {
@@ -188,6 +196,7 @@ export function useThreadChat({
           };
 
           const threadId = await createThread({
+            initialUserMessage: trimmedText,
             modelSelection,
             title: trimmedText.slice(0, 60),
           });
@@ -195,9 +204,7 @@ export function useThreadChat({
           threadIdRef.current = threadId;
           store.setActiveThreadId(threadId);
 
-          router.replace(
-            `/chats/t/${threadId}?q=${encodeURIComponent(trimmedText)}`,
-          );
+          router.replace(`/chats/t/${threadId}`);
           refreshSidebar();
           return;
         } finally {
@@ -247,15 +254,15 @@ export function useThreadChat({
   return {
     activeThreadId,
     error: error as Error | undefined,
-    handleModelChange,
-    handleSubmit,
-    handleThinkingBudgetChange,
     isCreatingThread,
     messages,
     selectedModelId,
     selectedProviderId,
     status,
-    stop,
     thinkingBudget,
+    handleModelChange,
+    handleSubmit,
+    handleThinkingBudgetChange,
+    stop,
   };
 }

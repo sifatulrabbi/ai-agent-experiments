@@ -5,13 +5,10 @@ import { notFound, redirect } from "next/navigation";
 
 export default async function ThreadPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ q?: string }>;
 }) {
   const { id } = await params;
-  const { q } = await searchParams;
   const session = await auth();
 
   if (!session?.user?.email) {
@@ -28,7 +25,6 @@ export default async function ThreadPage({
     <ThreadRouteContent
       initialMessages={thread.messages}
       initialModelSelection={thread.modelSelection}
-      initialPrompt={q}
       initialThreadId={thread.id}
       initialTitle={thread.title}
     />

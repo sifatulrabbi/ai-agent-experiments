@@ -12,7 +12,6 @@ import type { ThreadModelSelection } from "@/lib/server/chat-repository";
 
 interface ThreadRouteContentProps {
   initialMessages?: UIMessage[];
-  initialPrompt?: string;
   initialThreadId?: string;
   initialTitle?: string;
   initialModelSelection?: ThreadModelSelection;
@@ -20,7 +19,6 @@ interface ThreadRouteContentProps {
 
 export function ThreadRouteContent({
   initialMessages = [],
-  initialPrompt,
   initialThreadId,
   initialTitle,
   initialModelSelection,
@@ -41,7 +39,6 @@ export function ThreadRouteContent({
   } = useThreadChat({
     initialMessages,
     initialModelSelection,
-    initialPrompt,
     initialThreadId,
   });
 

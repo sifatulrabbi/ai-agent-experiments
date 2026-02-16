@@ -13,6 +13,40 @@ import { AgentsFactory } from "@/lib/server/agents";
 
 export const maxDuration = 30;
 
+function isPendingMessage(message: UIMessage): boolean {
+  const metadata = (
+    message as UIMessage & {
+      metadata?: unknown;
+    }
+  ).metadata;
+
+  if (!metadata || typeof metadata !== "object") {
+    return false;
+  }
+
+  return (metadata as Record<string, unknown>).pending === true;
+}
+
+function clearPendingFlag(message: UIMessage): UIMessage {
+  const metadata = (
+    message as UIMessage & {
+      metadata?: unknown;
+    }
+  ).metadata;
+
+  if (!metadata || typeof metadata !== "object") {
+    return message;
+  }
+
+  const nextMetadata = { ...(metadata as Record<string, unknown>) };
+  delete nextMetadata.pending;
+
+  return {
+    ...message,
+    metadata: nextMetadata,
+  } as UIMessage;
+}
+
 export async function POST(request: Request) {
   const userId = await requireUserId();
 
@@ -22,13 +56,14 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     messages?: UIMessage[];
+    invokePending?: boolean;
     modelId?: string;
     providerId?: string;
     thinkingBudget?: ReasoningBudget;
     threadId?: string;
   } | null;
 
-  if (!body?.threadId || !Array.isArray(body.messages)) {
+  if (!body?.threadId) {
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
   const threadId = body.threadId;
@@ -39,13 +74,43 @@ export async function POST(request: Request) {
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }
 
-  // Persist the latest client-side messages immediately so user messages are not
-  // lost when the model call fails or is aborted.
-  await chatRepository.saveMessages({
-    messages: body.messages,
-    threadId,
-    userId,
-  });
+  let uiMessages: UIMessage[];
+
+  if (body.invokePending) {
+    const pendingIndex = [...thread.messages]
+      .map((message, index) => ({ index, message }))
+      .reverse()
+      .find(
+        ({ message }) => message.role === "user" && isPendingMessage(message),
+      )?.index;
+
+    if (pendingIndex === undefined) {
+      return Response.json(
+        { error: "No pending thread message found" },
+        { status: 409 },
+      );
+    }
+
+    uiMessages = thread.messages.map((message, index) =>
+      index === pendingIndex ? clearPendingFlag(message) : message,
+    );
+  } else {
+    if (!Array.isArray(body.messages)) {
+      return Response.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    uiMessages = body.messages;
+  }
+
+  // Persist client-side messages immediately for normal sends so user input is
+  // not lost when the model call fails or is aborted.
+  if (!body.invokePending) {
+    await chatRepository.saveMessages({
+      messages: uiMessages,
+      threadId,
+      userId,
+    });
+  }
 
   // Existing chat-with-LLM route logic intentionally kept for fallback/reference.
   // const modelId = typeof body.modelId === "string" ? body.modelId : undefined;
@@ -109,10 +174,10 @@ export async function POST(request: Request) {
 
   return createAgentUIStreamResponse({
     agent,
-    uiMessages: body.messages,
+    uiMessages,
     sendReasoning: true,
     sendSources: false,
-    originalMessages: body.messages as never[],
+    originalMessages: uiMessages as never[],
     onFinish: async ({ messages }) => {
       await chatRepository.saveMessages({
         messages,

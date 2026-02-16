@@ -5,6 +5,7 @@ import type { ThreadModelSelection } from "@/lib/server/chat-repository";
 
 interface CreateThreadRequest {
   modelSelection: ThreadModelSelection;
+  initialUserMessage?: string;
   title?: string;
 }
 
@@ -16,9 +17,13 @@ interface CreateThreadResponse {
 
 export function useThreadApi() {
   const createThread = useCallback(
-    async ({ modelSelection, title }: CreateThreadRequest): Promise<string> => {
+    async ({
+      modelSelection,
+      initialUserMessage,
+      title,
+    }: CreateThreadRequest): Promise<string> => {
       const response = await fetch("/agent/chats", {
-        body: JSON.stringify({ modelSelection, title }),
+        body: JSON.stringify({ initialUserMessage, modelSelection, title }),
         headers: {
           "Content-Type": "application/json",
         },

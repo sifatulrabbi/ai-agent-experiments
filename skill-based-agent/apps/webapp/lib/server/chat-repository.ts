@@ -24,6 +24,7 @@ export interface CreateThreadParams {
   userId: string;
   title?: string;
   modelSelection?: ThreadModelSelection;
+  messages?: UIMessage[];
 }
 
 export interface SaveMessagesParams {
@@ -71,6 +72,7 @@ class LocalFileChatRepository implements ChatRepository {
   }
 
   async createThread({
+    messages,
     userId,
     title,
     modelSelection,
@@ -80,7 +82,7 @@ class LocalFileChatRepository implements ChatRepository {
     const thread: ChatThread = {
       createdAt: now,
       id: randomUUID(),
-      messages: [],
+      messages: normalizeMessageIds(messages ?? []),
       modelSelection,
       title: title?.trim() || "New chat",
       updatedAt: now,
