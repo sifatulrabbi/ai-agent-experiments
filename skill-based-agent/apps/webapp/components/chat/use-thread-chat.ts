@@ -36,10 +36,15 @@ interface UseThreadChatArgs {
 interface UseThreadChatResult {
   activeThreadId: string | null;
   error: Error | undefined;
+  handleEditUserMessage: (payload: {
+    messageId: string;
+    text: string;
+  }) => Promise<void>;
   handleModelChange: (selection: {
     modelId: string;
     providerId: string;
   }) => void;
+  handleRerunAssistantMessage: (payload: { messageId: string }) => Promise<void>;
   handleSubmit: (payload: { text: string }) => Promise<void>;
   handleThinkingBudgetChange: (budget: ReasoningBudget) => void;
   isCreatingThread: boolean;
@@ -145,7 +150,7 @@ export function useThreadChat({
 
   const pendingPromptHandledThreadsRef = useRef(new Set<string>());
 
-  const { error, messages, sendMessage, status, stop } = useChat({
+  const { error, messages, regenerate, sendMessage, status, stop } = useChat({
     messages: initialMessages,
     transport,
   });
@@ -218,6 +223,32 @@ export function useThreadChat({
     [createThread, refreshSidebar, router, sendMessage],
   );
 
+  const handleEditUserMessage = useCallback(
+    async ({ messageId, text }: { messageId: string; text: string }) => {
+      const trimmedText = text.trim();
+      if (!trimmedText) {
+        return;
+      }
+
+      await sendMessage({
+        messageId,
+        text: trimmedText,
+      });
+      refreshSidebar();
+    },
+    [refreshSidebar, sendMessage],
+  );
+
+  const handleRerunAssistantMessage = useCallback(
+    async ({ messageId }: { messageId: string }) => {
+      await regenerate({
+        messageId,
+      });
+      refreshSidebar();
+    },
+    [regenerate, refreshSidebar],
+  );
+
   const handleModelChange = useCallback(
     ({ modelId, providerId }: { modelId: string; providerId: string }) => {
       const reasoning = getModelReasoningById(providerId, modelId);
@@ -260,7 +291,9 @@ export function useThreadChat({
     selectedProviderId,
     status,
     thinkingBudget,
+    handleEditUserMessage,
     handleModelChange,
+    handleRerunAssistantMessage,
     handleSubmit,
     handleThinkingBudgetChange,
     stop,

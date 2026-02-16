@@ -32,7 +32,9 @@ export function ThreadRouteContent({
     selectedProviderId,
     status,
     thinkingBudget,
+    handleEditUserMessage,
     handleModelChange,
+    handleRerunAssistantMessage,
     handleThinkingBudgetChange,
     handleSubmit,
     stop,
@@ -49,6 +51,8 @@ export function ThreadRouteContent({
       <ThreadHeader activeThreadId={activeThreadId} title={initialTitle} />
 
       <ThreadMessages
+        onEditUserMessage={handleEditUserMessage}
+        onRerunAssistantMessage={handleRerunAssistantMessage}
         messages={messages}
         status={status}
         streamingLabel={streamingLabel}
