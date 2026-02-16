@@ -85,8 +85,13 @@ export function ThreadPromptInput({
   );
 
   const selectedModel = useMemo(
-    () => getModelById(modelSelection.providerId, modelSelection.modelId),
-    [modelSelection.modelId, modelSelection.providerId],
+    () =>
+      getModelById(
+        providers,
+        modelSelection.providerId,
+        modelSelection.modelId,
+      ),
+    [modelSelection.modelId, modelSelection.providerId, providers],
   );
   const availableReasoningBudgets = useMemo(
     () => selectedModel?.reasoning.budgets ?? [],

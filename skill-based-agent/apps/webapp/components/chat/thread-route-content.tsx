@@ -3,24 +3,26 @@
 import type { UIMessage } from "ai";
 import { ThreadErrorAlert } from "@/components/chat/thread-error-alert";
 import { ThreadHeader } from "@/components/chat/thread-header";
-import { ModelsCatalogue } from "@/components/chat/model-catalog";
+import type { AIModelProviderEntry } from "@/components/chat/model-catalog";
 import { ThreadMessages } from "@/components/chat/thread-messages";
 import { ThreadPromptInput } from "@/components/chat/thread-user-input";
 import { useThreadChat } from "@/components/chat/use-thread-chat";
 import type { ThreadModelSelection } from "@/lib/server/chat-repository";
 
 interface ThreadRouteContentProps {
+  defaultModelSelection: ThreadModelSelection;
   initialMessages?: UIMessage[];
   initialThreadId?: string;
-  initialTitle?: string;
   initialModelSelection?: ThreadModelSelection;
+  providers: AIModelProviderEntry[];
 }
 
 export function ThreadRouteContent({
+  defaultModelSelection,
   initialMessages = [],
   initialThreadId,
-  initialTitle,
   initialModelSelection,
+  providers,
 }: ThreadRouteContentProps) {
   const {
     activeThreadId,
@@ -38,9 +40,11 @@ export function ThreadRouteContent({
     handleSubmit,
     stop,
   } = useThreadChat({
+    defaultModelSelection,
     initialMessages,
     initialModelSelection,
     initialThreadId,
+    providers,
   });
 
   return (
@@ -66,7 +70,7 @@ export function ThreadRouteContent({
         onStop={stop}
         onSubmit={handleSubmit}
         onThinkingBudgetChange={handleThinkingBudgetChange}
-        providers={ModelsCatalogue}
+        providers={providers}
         status={status}
         thinkingBudget={thinkingBudget}
       />

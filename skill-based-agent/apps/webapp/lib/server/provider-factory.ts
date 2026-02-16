@@ -1,6 +1,6 @@
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
-import { DEFAULT_CHAT_MODEL_ID } from "@/components/chat/model-catalog";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { getDefaultModelSelection } from "@/lib/server/models/model-catalog";
 
 class ProviderFactory {
   static isOpenRouterConfigured(): boolean {
@@ -17,14 +17,11 @@ class ProviderFactory {
   });
 
   static languageModel(modelId: string): LanguageModelV3 {
-    // OpenRouter is OpenAI-chat-completions compatible; using `.chat(...)`
-    // avoids Responses-API incompatibilities that can yield empty assistant parts.
     return ProviderFactory.openRouter.chat(modelId);
-    // return ProviderFactory.openRouter.responses(modelId);
   }
 }
 
 export const DEFAULT_MODEL =
-  process.env.OPENROUTER_MODEL || DEFAULT_CHAT_MODEL_ID;
+  process.env.OPENROUTER_MODEL || getDefaultModelSelection().modelId;
 
 export { ProviderFactory };

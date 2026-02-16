@@ -1,15 +1,14 @@
 import { createAgentUIStreamResponse, type UIMessage } from "ai";
 import { createRootAgent } from "@protean/protean";
-import { chatRepository } from "@/lib/server/chat-repository";
 import { requireUserId } from "@/lib/server/auth-user";
-import { DEFAULT_MODEL } from "@/lib/server/provider-factory";
+import { chatRepository } from "@/lib/server/chat-repository";
+import { findModel } from "@/lib/server/models/model-catalog";
 import {
-  DEFAULT_CHAT_PROVIDER_ID,
-  getModelById,
-  getModelReasoningById,
-  type ReasoningBudget,
-} from "@/components/chat/model-catalog";
-import { AgentsFactory } from "@/lib/server/agents";
+  isSameModelSelection,
+  parseLegacyModelSelection,
+  parseLooseModelSelection,
+  resolveModelSelection,
+} from "@/lib/server/models/model-selection";
 
 export const maxDuration = 30;
 
@@ -48,25 +47,29 @@ function clearPendingFlag(message: UIMessage): UIMessage {
 }
 
 export async function POST(request: Request) {
-  const userId = await requireUserId();
+  const [userId, body] = await Promise.all([
+    requireUserId(),
+    request.json().catch(() => null),
+  ]);
 
   if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as {
-    messages?: UIMessage[];
+  const parsedBody = body as {
     invokePending?: boolean;
-    modelId?: string;
-    providerId?: string;
-    thinkingBudget?: ReasoningBudget;
+    modelId?: unknown;
+    messages?: UIMessage[];
+    modelSelection?: unknown;
+    providerId?: unknown;
+    thinkingBudget?: unknown;
     threadId?: string;
   } | null;
 
-  if (!body?.threadId) {
+  if (!parsedBody?.threadId) {
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
-  const threadId = body.threadId;
+  const threadId = parsedBody.threadId;
 
   const thread = await chatRepository.getThread(userId, threadId);
 
@@ -74,9 +77,38 @@ export async function POST(request: Request) {
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }
 
+  const requestSelection =
+    parseLooseModelSelection(parsedBody.modelSelection) ??
+    parseLegacyModelSelection(parsedBody);
+
+  const resolvedModelSelection = resolveModelSelection({
+    requestSelection,
+    threadSelection: thread.modelSelection,
+  });
+
+  if (!isSameModelSelection(thread.modelSelection, resolvedModelSelection)) {
+    await chatRepository.updateThreadSettings({
+      modelSelection: resolvedModelSelection,
+      threadId,
+      userId,
+    });
+  }
+
+  const resolvedModel = findModel(
+    resolvedModelSelection.providerId,
+    resolvedModelSelection.modelId,
+  );
+
+  if (!resolvedModel) {
+    return Response.json(
+      { error: "No valid model configuration available." },
+      { status: 500 },
+    );
+  }
+
   let uiMessages: UIMessage[];
 
-  if (body.invokePending) {
+  if (parsedBody.invokePending) {
     const pendingIndex = [...thread.messages]
       .map((message, index) => ({ index, message }))
       .reverse()
@@ -95,16 +127,14 @@ export async function POST(request: Request) {
       index === pendingIndex ? clearPendingFlag(message) : message,
     );
   } else {
-    if (!Array.isArray(body.messages)) {
+    if (!Array.isArray(parsedBody.messages)) {
       return Response.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    uiMessages = body.messages;
+    uiMessages = parsedBody.messages;
   }
 
-  // Persist client-side messages immediately for normal sends so user input is
-  // not lost when the model call fails or is aborted.
-  if (!body.invokePending) {
+  if (!parsedBody.invokePending) {
     await chatRepository.saveMessages({
       messages: uiMessages,
       threadId,
@@ -112,65 +142,21 @@ export async function POST(request: Request) {
     });
   }
 
-  // Existing chat-with-LLM route logic intentionally kept for fallback/reference.
-  // const modelId = typeof body.modelId === "string" ? body.modelId : undefined;
-  // const providerId =
-  //   typeof body.providerId === "string" && body.providerId.trim().length > 0
-  //     ? body.providerId
-  //     : DEFAULT_CHAT_PROVIDER_ID;
-  // const selectedModel = modelId ? getModelById(providerId, modelId) : undefined;
-  // const fallbackModel =
-  //   getModelById(DEFAULT_CHAT_PROVIDER_ID, DEFAULT_MODEL) ??
-  //   getModelById(DEFAULT_CHAT_PROVIDER_ID, "openai/gpt-5.2");
-  //
-  // if (!selectedModel && !fallbackModel) {
-  //   return Response.json(
-  //     { error: "No valid model configuration available." },
-  //     { status: 500 },
-  //   );
-  // }
-  //
-  // const resolvedModel = selectedModel ?? fallbackModel!;
-  // const resolvedProviderId = selectedModel
-  //   ? providerId
-  //   : DEFAULT_CHAT_PROVIDER_ID;
-  // const resolvedReasoning = getModelReasoningById(
-  //   resolvedProviderId,
-  //   resolvedModel.id,
-  // );
-  // const requestedReasoningBudget = body.thinkingBudget;
-  // const reasoningBudget =
-  //   requestedReasoningBudget &&
-  //   resolvedReasoning?.budgets.includes(requestedReasoningBudget)
-  //     ? requestedReasoningBudget
-  //     : resolvedReasoning?.defaultValue;
-  //
-  // if (
-  //   resolvedModel.provider === "openrouter" &&
-  //   !process.env.OPENROUTER_API_KEY
-  // ) {
-  //   return Response.json(
-  //     { error: "Missing OPENROUTER_API_KEY" },
-  //     { status: 500 },
-  //   );
-  // }
-  //
-  // if (resolvedModel.provider === "openai" && !process.env.OPENAI_API_KEY) {
-  //   return Response.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
-  // }
-  // const agent = AgentsFactory.getAgent(resolvedModel, {
-  //   reasoningBudget,
-  // });
-  // const p = await agent.stream({ messages: [] });
-
-  if (!process.env.OPENROUTER_API_KEY) {
+  if (
+    resolvedModel.runtimeProvider === "openrouter" &&
+    !process.env.OPENROUTER_API_KEY
+  ) {
     return Response.json(
       { error: "Missing OPENROUTER_API_KEY" },
       { status: 500 },
     );
   }
 
-  const agent = await createRootAgent();
+  const agent = await createRootAgent({
+    modelId: resolvedModel.id,
+    reasoningBudget: resolvedModelSelection.reasoningBudget,
+    runtimeProvider: resolvedModel.runtimeProvider,
+  });
 
   return createAgentUIStreamResponse({
     agent,

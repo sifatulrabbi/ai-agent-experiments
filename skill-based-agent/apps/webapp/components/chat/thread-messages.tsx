@@ -215,7 +215,6 @@ export function ThreadMessages({
             );
           })
         )}
-
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>

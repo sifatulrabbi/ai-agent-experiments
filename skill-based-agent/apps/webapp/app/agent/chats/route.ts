@@ -1,8 +1,11 @@
-import { chatRepository } from "@/lib/server/chat-repository";
-import { requireUserId } from "@/lib/server/auth-user";
-import type { ReasoningBudget } from "@/components/chat/model-catalog";
-import type { UIMessage } from "ai";
 import { randomUUID } from "node:crypto";
+import type { UIMessage } from "ai";
+import { requireUserId } from "@/lib/server/auth-user";
+import { chatRepository } from "@/lib/server/chat-repository";
+import {
+  normalizeThreadModelSelection,
+  parseStrictModelSelection,
+} from "@/lib/server/models/model-selection";
 
 export async function GET() {
   const userId = await requireUserId();
@@ -18,30 +21,25 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const userId = await requireUserId();
+  const [userId, body] = await Promise.all([
+    requireUserId(),
+    request.json().catch(() => ({})),
+  ]);
 
   if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json().catch(() => ({}));
   const title = typeof body?.title === "string" ? body.title : undefined;
   const initialUserMessage =
     typeof body?.initialUserMessage === "string" &&
     body.initialUserMessage.trim().length > 0
       ? body.initialUserMessage.trim()
       : undefined;
-  const modelSelection =
-    typeof body?.modelSelection?.providerId === "string" &&
-    typeof body?.modelSelection?.modelId === "string" &&
-    typeof body?.modelSelection?.reasoningBudget === "string"
-      ? {
-          providerId: body.modelSelection.providerId,
-          modelId: body.modelSelection.modelId,
-          reasoningBudget: body.modelSelection
-            .reasoningBudget as ReasoningBudget,
-        }
-      : undefined;
+
+  const modelSelection = normalizeThreadModelSelection(
+    parseStrictModelSelection(body?.modelSelection),
+  );
 
   const messages: UIMessage[] = initialUserMessage
     ? [

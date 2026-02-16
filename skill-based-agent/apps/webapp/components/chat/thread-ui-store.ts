@@ -1,13 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import {
-  DEFAULT_CHAT_MODEL_ID,
-  DEFAULT_CHAT_PROVIDER_ID,
-  getModelReasoningById,
-  type ReasoningBudget,
-} from "@/components/chat/model-catalog";
-import type { ThreadModelSelection } from "@/lib/server/chat-repository";
+import type { ReasoningBudget } from "@/components/chat/model-catalog";
 
 interface ThreadUiStore {
   activeThreadId: string | null;
@@ -19,7 +13,9 @@ interface ThreadUiStore {
   thinkingBudget: ReasoningBudget;
   hydrateFromRoute: (args: {
     threadId: string | null;
-    modelSelection?: ThreadModelSelection;
+    modelId: string;
+    providerId: string;
+    reasoningBudget: ReasoningBudget;
   }) => void;
   setActiveThreadId: (threadId: string | null) => void;
   setDeepResearchEnabled: (enabled: boolean) => void;
@@ -33,65 +29,41 @@ interface ThreadUiStore {
   setThinkingBudget: (budget: ReasoningBudget) => void;
 }
 
-function resolveSelection(modelSelection?: ThreadModelSelection) {
-  const providerId = modelSelection?.providerId ?? DEFAULT_CHAT_PROVIDER_ID;
-  const modelId = modelSelection?.modelId ?? DEFAULT_CHAT_MODEL_ID;
-  const reasoning = getModelReasoningById(providerId, modelId);
-  const reasoningBudget =
-    modelSelection?.reasoningBudget &&
-    reasoning?.budgets.includes(modelSelection.reasoningBudget)
-      ? modelSelection.reasoningBudget
-      : (reasoning?.defaultValue ?? "none");
+export const useThreadUiStore = create<ThreadUiStore>()((set) => ({
+  activeThreadId: null,
+  deepResearchEnabled: false,
+  imageCreationEnabled: false,
+  isCreatingThread: false,
+  selectedModelId: "",
+  selectedProviderId: "",
+  thinkingBudget: "none",
 
-  return {
-    modelId,
-    providerId,
-    reasoningBudget,
-  };
-}
+  hydrateFromRoute: ({ modelId, providerId, reasoningBudget, threadId }) => {
+    set({
+      activeThreadId: threadId,
+      isCreatingThread: false,
+      selectedModelId: modelId,
+      selectedProviderId: providerId,
+      thinkingBudget: reasoningBudget,
+    });
+  },
 
-export const useThreadUiStore = create<ThreadUiStore>()((set) => {
-  const initial = resolveSelection();
+  setActiveThreadId: (activeThreadId) => set({ activeThreadId }),
 
-  return {
-    activeThreadId: null,
-    deepResearchEnabled: false,
-    imageCreationEnabled: false,
-    isCreatingThread: false,
-    selectedModelId: initial.modelId,
-    selectedProviderId: initial.providerId,
-    thinkingBudget: initial.reasoningBudget,
+  setDeepResearchEnabled: (deepResearchEnabled) => set({ deepResearchEnabled }),
 
-    hydrateFromRoute: ({ threadId, modelSelection }) => {
-      const selection = resolveSelection(modelSelection);
-      set({
-        activeThreadId: threadId,
-        isCreatingThread: false,
-        selectedModelId: selection.modelId,
-        selectedProviderId: selection.providerId,
-        thinkingBudget: selection.reasoningBudget,
-      });
-    },
+  setImageCreationEnabled: (imageCreationEnabled) =>
+    set({ imageCreationEnabled }),
 
-    setActiveThreadId: (activeThreadId) => set({ activeThreadId }),
+  setIsCreatingThread: (isCreatingThread) => set({ isCreatingThread }),
 
-    setDeepResearchEnabled: (deepResearchEnabled) =>
-      set({ deepResearchEnabled }),
+  setModelSelection: ({ modelId, providerId, thinkingBudget }) => {
+    set((state) => ({
+      selectedModelId: modelId,
+      selectedProviderId: providerId,
+      thinkingBudget: thinkingBudget ?? state.thinkingBudget,
+    }));
+  },
 
-    setImageCreationEnabled: (imageCreationEnabled) =>
-      set({ imageCreationEnabled }),
-
-    setIsCreatingThread: (isCreatingThread) => set({ isCreatingThread }),
-
-    setModelSelection: ({ modelId, providerId, thinkingBudget }) => {
-      const reasoning = getModelReasoningById(providerId, modelId);
-      set({
-        selectedModelId: modelId,
-        selectedProviderId: providerId,
-        thinkingBudget: thinkingBudget ?? reasoning?.defaultValue ?? "none",
-      });
-    },
-
-    setThinkingBudget: (thinkingBudget) => set({ thinkingBudget }),
-  };
-});
+  setThinkingBudget: (thinkingBudget) => set({ thinkingBudget }),
+}));
