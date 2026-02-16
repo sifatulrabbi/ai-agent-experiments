@@ -7,7 +7,6 @@ import {
   MessageSquareIcon,
   PencilIcon,
   RotateCcwIcon,
-  SparklesIcon,
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import {
@@ -23,7 +22,6 @@ import {
   MessageContent,
   MessageToolbar,
 } from "@/components/ai-elements/message";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 import { ThreadMessageParts } from "@/components/chat/thread-message-parts";
 import {
   messageKeyFor,
@@ -40,7 +38,6 @@ interface ThreadMessagesProps {
   }) => Promise<void>;
   onRerunAssistantMessage: (payload: { messageId: string }) => Promise<void>;
   status: ThreadStatus;
-  streamingLabel: string | null;
 }
 
 function getMessageText(message: UIMessage): string {
@@ -54,7 +51,6 @@ function getMessageText(message: UIMessage): string {
 export function ThreadMessages({
   messages,
   status,
-  streamingLabel,
   onEditUserMessage,
   onRerunAssistantMessage,
 }: ThreadMessagesProps) {
@@ -134,6 +130,7 @@ export function ThreadMessages({
                   <div className="space-y-2">
                     <Textarea
                       autoFocus
+                      className="font-(family-name:--font-literata) text-base"
                       onChange={(event) => setEditValue(event.target.value)}
                       value={editValue}
                     />
@@ -161,6 +158,7 @@ export function ThreadMessages({
                 ) : null}
 
                 {editingMessageId !== message.id &&
+                !isBusy &&
                 (message.role === "assistant" || message.role === "user") ? (
                   <MessageToolbar
                     className={
@@ -218,12 +216,6 @@ export function ThreadMessages({
           })
         )}
 
-        {streamingLabel ? (
-          <div className="flex items-center gap-2 font-(family-name:--font-literata) text-muted-foreground">
-            <SparklesIcon className="size-4" />
-            <Shimmer>{streamingLabel}</Shimmer>
-          </div>
-        ) : null}
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>

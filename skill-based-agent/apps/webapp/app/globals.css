@@ -128,4 +128,24 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Restore list styles inside markdown message responses */
+  .message-response ul {
+    list-style-type: disc;
+    padding-left: 1.5em;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+  }
+  .message-response ol {
+    list-style-type: decimal;
+    padding-left: 1.5em;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+  }
+  .message-response li > ul {
+    list-style-type: circle;
+  }
+  .message-response li > ul > li > ul {
+    list-style-type: square;
+  }
 }

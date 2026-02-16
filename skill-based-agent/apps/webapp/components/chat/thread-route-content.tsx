@@ -5,7 +5,6 @@ import { ThreadErrorAlert } from "@/components/chat/thread-error-alert";
 import { ThreadHeader } from "@/components/chat/thread-header";
 import { ModelsCatalogue } from "@/components/chat/model-catalog";
 import { ThreadMessages } from "@/components/chat/thread-messages";
-import { getStreamingLabel } from "@/components/chat/thread-streaming-label";
 import { ThreadPromptInput } from "@/components/chat/thread-user-input";
 import { useThreadChat } from "@/components/chat/use-thread-chat";
 import type { ThreadModelSelection } from "@/lib/server/chat-repository";
@@ -44,8 +43,6 @@ export function ThreadRouteContent({
     initialThreadId,
   });
 
-  const streamingLabel = getStreamingLabel(status, messages);
-
   return (
     <>
       <ThreadHeader activeThreadId={activeThreadId} />
@@ -55,7 +52,6 @@ export function ThreadRouteContent({
         onRerunAssistantMessage={handleRerunAssistantMessage}
         messages={messages}
         status={status}
-        streamingLabel={streamingLabel}
       />
 
       {error ? <ThreadErrorAlert message={error.message} /> : null}
