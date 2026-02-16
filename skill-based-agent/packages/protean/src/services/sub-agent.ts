@@ -1,4 +1,5 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
+import { type Tool } from "ai";
 import { type Skill } from "@protean/skill";
 import { type Logger } from "@protean/logger";
 
@@ -54,6 +55,7 @@ function extractOutputPathFromSteps(
 export async function createSubAgent(
   skillsRegistry: Skill<unknown>[],
   logger: Logger,
+  baseTools?: { [k: string]: Tool },
 ): Promise<SubAgentService> {
   return {
     spawn: async (cfg: SubAgentConfig): Promise<SubAgentResult> => {
@@ -71,6 +73,7 @@ export async function createSubAgent(
             cfg.systemPrompt,
           ),
           skillsRegistry,
+          tools: baseTools,
         },
         logger,
       );

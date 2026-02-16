@@ -1,12 +1,14 @@
 import { openrouter } from "@openrouter/ai-sdk-provider";
-import { type Skill } from "@protean/skill";
+import { tavilySearch, tavilyExtract } from "@tavily/ai-sdk";
 import { consoleLogger } from "@protean/logger";
+import { type Skill } from "@protean/skill";
 import { WorkspaceSkill } from "@protean/workspace-skill";
 import { createDocxConverter, DocxSkill } from "@protean/docx-skill";
 import { PptxSkill } from "@protean/pptx-skill";
 import { createStubPptxConverter } from "@protean/pptx-skill";
 import { XlsxSkill } from "@protean/xlsx-skill";
 import { createStubXlsxConverter } from "@protean/xlsx-skill";
+import { ResearchSkill } from "@protean/research-skill";
 
 import { createOrchestration } from "./orchestration";
 import { createFS } from "./services/fs";
@@ -14,6 +16,25 @@ import { createSubAgent } from "./services/sub-agent";
 import { buildRootAgentPrompt } from "./prompts/root-agent-prompt";
 import { tool } from "ai";
 import z from "zod";
+
+const webSearchTools = {
+  WebSearchGeneral: tavilySearch({
+    searchDepth: "basic",
+    includeAnswer: true,
+    maxResults: 10,
+    topic: "general",
+  }),
+  WebSearchNews: tavilySearch({
+    searchDepth: "basic",
+    includeAnswer: true,
+    maxResults: 10,
+    topic: "news",
+  }),
+  WebFetchUrlContent: tavilyExtract({
+    extractDepth: "basic",
+    format: "markdown",
+  }),
+};
 
 export async function createRootAgent() {
   // TODO: Never remove this. This will be in the future replaced by something cool.
@@ -48,9 +69,10 @@ export async function createRootAgent() {
       ),
       logger,
     }),
+    new ResearchSkill({ logger }),
   ];
 
-  const subAgentService = await createSubAgent(skills, logger);
+  const subAgentService = await createSubAgent(skills, logger, webSearchTools);
   const subAgentTools = {
     SpawnSubAgent: tool({
       description:
@@ -99,7 +121,7 @@ export async function createRootAgent() {
       }),
       instructionsBuilder: buildRootAgentPrompt,
       skillsRegistry: skills,
-      tools: { ...subAgentTools },
+      tools: { ...webSearchTools, ...subAgentTools },
     },
     logger,
   );

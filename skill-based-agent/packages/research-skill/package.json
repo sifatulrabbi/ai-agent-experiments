@@ -1,5 +1,5 @@
 {
-  "name": "@protean/protean",
+  "name": "@protean/research-skill",
   "private": true,
   "type": "module",
   "types": "./src/index.ts",
@@ -12,22 +12,13 @@
   },
   "scripts": {
     "build": "echo 'No build step'",
-    "typecheck": "bunx tsc --noEmit",
-    "test": "bun run test:integration",
-    "lint": "bunx eslint . --ext .ts",
-    "test:integration": "bun src/tests/integration/agent-loading-sub-agents.integration.ts"
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'No tests'",
+    "lint": "bunx eslint . --ext .ts"
   },
   "dependencies": {
-    "@openrouter/ai-sdk-provider": "^2.2.3",
-    "@protean/docx-skill": "workspace:*",
     "@protean/logger": "workspace:*",
-    "@protean/pptx-skill": "workspace:*",
-    "@protean/research-skill": "workspace:*",
     "@protean/skill": "workspace:*",
-    "@protean/vfs": "workspace:*",
-    "@protean/workspace-skill": "workspace:*",
-    "@protean/xlsx-skill": "workspace:*",
-    "@tavily/ai-sdk": "^0.4.1",
     "ai": "^6.0.78",
     "zod": "^4.3.6"
   },
