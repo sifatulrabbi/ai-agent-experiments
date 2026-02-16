@@ -48,7 +48,7 @@ export function ThreadRouteContent({
 
   return (
     <>
-      <ThreadHeader activeThreadId={activeThreadId} title={initialTitle} />
+      <ThreadHeader activeThreadId={activeThreadId} />
 
       <ThreadMessages
         onEditUserMessage={handleEditUserMessage}
