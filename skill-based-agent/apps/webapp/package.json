@@ -12,12 +12,12 @@
     "format": "prettier --write ./*"
   },
   "dependencies": {
-    "@protean/protean": "workspace:*",
-    "@ai-sdk/provider": "^3.0.8",
     "@ai-sdk/openai": "^3.0.26",
+    "@ai-sdk/provider": "^3.0.8",
     "@ai-sdk/react": "^3.0.81",
     "@daytonaio/sdk": "^0.141.0",
     "@openrouter/ai-sdk-provider": "^2.2.3",
+    "@protean/protean": "workspace:*",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@rive-app/react-webgl2": "^4.26.2",
     "@streamdown/cjk": "^1.0.2",

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArchiveIcon,
+  MenuIcon,
   MoreHorizontalIcon,
   PlusIcon,
   StarIcon,
@@ -20,6 +21,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { useThreadApi } from "@/components/chat/use-thread-api";
 
 interface ThreadsSidebarProps {
@@ -39,10 +47,16 @@ export function ThreadsSidebar({
   const [threadItems, setThreadItems] = useState(threads);
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     setThreadItems(threads);
   }, [threads]);
+
+  // Close mobile sheet on navigation
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   const handleDelete = useCallback(
     async (threadId: string) => {
@@ -73,8 +87,8 @@ export function ThreadsSidebar({
     [deleteThread, pathname, router],
   );
 
-  return (
-    <aside className="hidden h-screen w-72 flex-col border-r border-sidebar-border bg-sidebar p-3 md:flex">
+  const sidebarContent = (
+    <>
       <Button asChild className="w-full justify-start" size="sm">
         <Link href="/chats/new">
           <PlusIcon className="size-4" />
@@ -165,6 +179,37 @@ export function ThreadsSidebar({
       <div className="pt-3">
         <SidebarUserMenu userEmail={userEmail} userName={userName} />
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden h-screen w-72 flex-col border-r border-sidebar-border bg-sidebar p-3 md:flex">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile toggle + sheet */}
+      <div className="fixed top-3 left-3 z-40 md:hidden">
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetTrigger asChild>
+            <Button size="icon" variant="outline">
+              <MenuIcon className="size-5" />
+              <span className="sr-only">Open sidebar</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent
+            side="left"
+            showCloseButton={false}
+            className="flex w-72 flex-col bg-sidebar p-3"
+          >
+            <SheetHeader className="p-0">
+              <SheetTitle className="sr-only">Chat threads</SheetTitle>
+            </SheetHeader>
+            {sidebarContent}
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
   );
 }
