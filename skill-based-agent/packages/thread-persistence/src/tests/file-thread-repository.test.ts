@@ -17,7 +17,7 @@ let fs: FS;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "thread-repo-test-"));
   fs = await createLocalFs(root);
-  threadsDir = "threads";
+  threadsDir = ".threads";
 });
 
 afterEach(async () => {
@@ -29,7 +29,7 @@ afterEach(async () => {
 function createRepository(pricingCalculator?: ThreadPricingCalculator) {
   return createFileThreadRepository({
     fs,
-    filePath: threadsDir,
+    dirPath: threadsDir,
     pricingCalculator,
   });
 }
@@ -289,7 +289,7 @@ describe("createFileThreadRepository", () => {
     const repo = createRepository();
     const thread = await repo.createThread();
 
-    const threadFilePath = `thread.${thread.id}.jsonc`;
+    const threadFilePath = `${threadsDir}/thread.${thread.id}.jsonc`;
     const raw = await fs.readFile(threadFilePath);
     const parsed = JSON.parse(raw) as {
       schemaVersion: number;

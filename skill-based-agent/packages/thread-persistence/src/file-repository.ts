@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { modelMessageSchema } from "ai";
-import type { FS } from "@protean/vfs";
 import { z } from "zod";
+import type { FileEntry, FS } from "@protean/vfs";
 
 import { ThreadCompactor } from "./compaction";
 import { ThreadPersistenceError } from "./errors";
@@ -66,7 +66,10 @@ const threadRecordSchema: z.ZodType<ThreadRecord> = z.object({
 
 export interface FileThreadRepositoryOptions {
   fs: FS;
-  filePath: string;
+  /**
+   *  Default is `.threads`
+   */
+  dirPath?: string;
   pricingCalculator?: ThreadPricingCalculator;
 }
 
@@ -74,13 +77,8 @@ export function createFileThreadRepository(
   options: FileThreadRepositoryOptions,
 ): ThreadRepository {
   const fs = options.fs;
-  const workspaceRootAbsolute = fs.resolvePath(".");
-  const rootDirAbsolute = fs.resolvePath(options.filePath);
-  const rootDir = toWorkspaceRelativePath(
-    rootDirAbsolute,
-    workspaceRootAbsolute,
-  );
   const pricingCalculator = options.pricingCalculator;
+  const rootDir = options.dirPath || ".threads";
   const compactor = new ThreadCompactor();
   let writeQueue: Promise<void> = Promise.resolve();
 
@@ -105,7 +103,7 @@ export function createFileThreadRepository(
   function threadFilePath(threadId: string): string {
     ensureThreadId(threadId);
     const fileName = `thread.${threadId}.jsonc`;
-    return `/${fileName}`;
+    return `${rootDir}/${fileName}`;
   }
 
   function isThreadFile(name: string): boolean {
@@ -259,7 +257,7 @@ export function createFileThreadRepository(
   }): Promise<ThreadRecord[]> {
     await waitForPendingWrites();
 
-    let entries: { name: string; isDirectory: boolean }[];
+    let entries: FileEntry[];
     try {
       entries = await fs.readdir(rootDir);
     } catch (error) {
