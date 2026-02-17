@@ -338,11 +338,10 @@ export function useThreadChat({
         return;
       }
 
-      const invocationModelSelection =
-        await applyInvocationModelSelection({
-          modelSelection,
-          reasoningBudget,
-        });
+      const invocationModelSelection = await applyInvocationModelSelection({
+        modelSelection,
+        reasoningBudget,
+      });
 
       await sendMessage(
         {
@@ -370,8 +369,9 @@ export function useThreadChat({
       messageId: string;
       modelSelection?: { modelId: string; providerId: string };
     }) => {
-      const invocationModelSelection =
-        await applyInvocationModelSelection({ modelSelection });
+      const invocationModelSelection = await applyInvocationModelSelection({
+        modelSelection,
+      });
 
       await regenerate({
         ...(invocationModelSelection

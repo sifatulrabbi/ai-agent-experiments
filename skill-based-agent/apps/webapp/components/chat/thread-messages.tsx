@@ -118,7 +118,8 @@ export function ThreadMessages({
   const toastTimeoutRef = useRef<number | null>(null);
 
   const isBusy = status === "submitted" || status === "streaming";
-  const effectiveEditModelSelection = editModelSelection ?? currentModelSelection;
+  const effectiveEditModelSelection =
+    editModelSelection ?? currentModelSelection;
   const selectedEditModel = useMemo(
     () =>
       getModelById(
@@ -370,28 +371,35 @@ export function ThreadMessages({
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  {availableEditReasoningBudgets.map((budget) => (
-                                    <DropdownMenuItem
-                                      className="flex items-center justify-between gap-2"
-                                      key={budget}
-                                      onSelect={() => setEditReasoningBudget(budget)}
-                                    >
-                                      <span>
-                                        {budget === "none"
-                                          ? "None"
-                                          : `${budget[0]?.toUpperCase()}${budget.slice(1)}`}
-                                      </span>
-                                      {budget === activeEditReasoningBudget ? (
-                                        <CheckIcon className="size-4 text-muted-foreground" />
-                                      ) : null}
-                                    </DropdownMenuItem>
-                                  ))}
+                                  {availableEditReasoningBudgets.map(
+                                    (budget) => (
+                                      <DropdownMenuItem
+                                        className="flex items-center justify-between gap-2"
+                                        key={budget}
+                                        onSelect={() =>
+                                          setEditReasoningBudget(budget)
+                                        }
+                                      >
+                                        <span>
+                                          {budget === "none"
+                                            ? "None"
+                                            : `${budget[0]?.toUpperCase()}${budget.slice(1)}`}
+                                        </span>
+                                        {budget ===
+                                        activeEditReasoningBudget ? (
+                                          <CheckIcon className="size-4 text-muted-foreground" />
+                                        ) : null}
+                                      </DropdownMenuItem>
+                                    ),
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
 
                               <Select
                                 onValueChange={(value) =>
-                                  setEditReasoningBudget(value as ReasoningBudget)
+                                  setEditReasoningBudget(
+                                    value as ReasoningBudget,
+                                  )
                                 }
                                 value={activeEditReasoningBudget}
                               >
@@ -403,13 +411,15 @@ export function ThreadMessages({
                                   <SelectValue placeholder="Thinking" />
                                 </SelectTrigger>
                                 <SelectContent align="start">
-                                  {availableEditReasoningBudgets.map((budget) => (
-                                    <SelectItem key={budget} value={budget}>
-                                      {budget === "none"
-                                        ? "None"
-                                        : `${budget[0]?.toUpperCase()}${budget.slice(1)}`}
-                                    </SelectItem>
-                                  ))}
+                                  {availableEditReasoningBudgets.map(
+                                    (budget) => (
+                                      <SelectItem key={budget} value={budget}>
+                                        {budget === "none"
+                                          ? "None"
+                                          : `${budget[0]?.toUpperCase()}${budget.slice(1)}`}
+                                      </SelectItem>
+                                    ),
+                                  )}
                                 </SelectContent>
                               </Select>
                             </>
@@ -547,10 +557,7 @@ export function ThreadMessages({
 
       {toastState ? (
         <div className="pointer-events-none fixed right-4 bottom-4 z-50 w-[min(360px,calc(100vw-2rem))]">
-          <Alert
-            className="border shadow-lg"
-            variant={toastState.variant}
-          >
+          <Alert className="border shadow-lg" variant={toastState.variant}>
             {toastState.variant === "destructive" ? (
               <AlertCircleIcon className="size-4" />
             ) : (
