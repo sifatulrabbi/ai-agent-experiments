@@ -1,6 +1,6 @@
 export { ThreadPersistenceError } from "./errors";
 export { ThreadCompactor } from "./compaction";
-export { FileThreadRepository } from "./file-repository";
+export { createFileThreadRepository } from "./file-repository";
 
 export type {
   ThreadMessageRecord,

@@ -18,7 +18,7 @@ export async function generateDocxFromCode(
   outputPath: string,
   fsClient: FS,
 ): Promise<{ outputPath: string }> {
-  const absOutputPath = fsClient.resolve(outputPath);
+  const absOutputPath = fsClient.resolvePath(outputPath);
   const safeOutputPath = JSON.stringify(absOutputPath);
 
   const script = `import * as docx from "docx";
@@ -44,7 +44,7 @@ await Bun.write(${safeOutputPath}, buffer);
   const scriptRelPath = path.join(path.dirname(outputPath), scriptName);
   await fsClient.writeFile(scriptRelPath, script);
 
-  const absScriptPath = fsClient.resolve(scriptRelPath);
+  const absScriptPath = fsClient.resolvePath(scriptRelPath);
 
   try {
     await execFileAsync("bun", ["run", absScriptPath], {

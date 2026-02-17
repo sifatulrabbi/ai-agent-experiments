@@ -193,6 +193,7 @@
     "packages/thread-persistence": {
       "name": "@protean/thread-persistence",
       "dependencies": {
+        "@protean/vfs": "workspace:*",
         "ai": "^6.0.78",
         "zod": "^4.3.6",
       },

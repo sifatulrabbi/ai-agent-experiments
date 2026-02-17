@@ -131,6 +131,50 @@ describe("createLocalFs", () => {
     });
   });
 
+  describe("write lock", () => {
+    test("applies queued writes in call order", async () => {
+      const first = fs.writeFile("ordered.txt", "first");
+      const second = fs.writeFile("ordered.txt", "second");
+      const third = fs.writeFile("ordered.txt", "third");
+
+      await Promise.all([first, second, third]);
+
+      const content = await fs.readFile("ordered.txt");
+      expect(content).toBe("third");
+    });
+
+    test("serializes mixed write/remove operations", async () => {
+      const w1 = fs.writeFile("race.txt", "one");
+      const r1 = fs.remove("race.txt");
+      const w2 = fs.writeFile("race.txt", "two");
+
+      await Promise.all([w1, r1, w2]);
+
+      const content = await fs.readFile("race.txt");
+      expect(content).toBe("two");
+    });
+
+    test("releases lock when a queued write fails", async () => {
+      const failingWrite = fs.writeFile("../outside.txt", "bad");
+      const succeedingWrite = fs.writeFile("safe-after-failure.txt", "ok");
+
+      const [failed, succeeded] = await Promise.allSettled([
+        failingWrite,
+        succeedingWrite,
+      ]);
+
+      expect(failed.status).toBe("rejected");
+      if (failed.status === "rejected") {
+        expect(String(failed.reason)).toMatch(/escapes workspace root/);
+      }
+
+      expect(succeeded.status).toBe("fulfilled");
+
+      const content = await fs.readFile("safe-after-failure.txt");
+      expect(content).toBe("ok");
+    });
+  });
+
   describe("path traversal prevention", () => {
     test("rejects paths that escape the root", async () => {
       expect(fs.readFile("../../etc/passwd")).rejects.toThrow(

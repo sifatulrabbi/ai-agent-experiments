@@ -25,6 +25,8 @@ export interface ThreadMessageRecord {
 }
 
 export interface ThreadRecord {
+  schemaVersion: number;
+  contentSchemaVersion: number;
   id: string;
   history: ThreadMessageRecord[];
   activeHistory: ThreadMessageRecord[];

@@ -44,8 +44,8 @@ export async function docxToImages(
   await fsClient.mkdir(outputDir);
 
   // Resolve workspace-relative paths to absolute for external tools
-  const absDocxPath = fsClient.resolve(docxPath);
-  const absOutputDir = fsClient.resolve(outputDir);
+  const absDocxPath = fsClient.resolvePath(docxPath);
+  const absOutputDir = fsClient.resolvePath(outputDir);
 
   // Step 1: Convert DOCX → PDF via LibreOffice headless
   await execFileAsync(sofficePath, [
@@ -60,7 +60,7 @@ export async function docxToImages(
   // Find the generated PDF (workspace-relative)
   const baseName = path.basename(docxPath, path.extname(docxPath));
   const pdfRelPath = path.join(outputDir, `${baseName}.pdf`);
-  const absPdfPath = fsClient.resolve(pdfRelPath);
+  const absPdfPath = fsClient.resolvePath(pdfRelPath);
 
   // Step 2: Convert PDF → PNG images using pdf-to-img
   const { pdf } = await import("pdf-to-img");

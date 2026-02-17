@@ -23,5 +23,5 @@ export interface FS {
   ): Promise<void>;
   remove(fullPath: string): Promise<void>;
   /** Resolve a workspace-relative path to an absolute filesystem path. */
-  resolve(filePath: string): string;
+  resolvePath(filePath: string): string;
 }

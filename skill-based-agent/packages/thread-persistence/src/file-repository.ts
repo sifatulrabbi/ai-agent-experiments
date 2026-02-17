@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { modelMessageSchema } from "ai";
+import type { FS } from "@protean/vfs";
 import { z } from "zod";
 
 import { ThreadCompactor } from "./compaction";
@@ -23,6 +22,9 @@ import {
   emptyUsage,
   resolveMessageCost,
 } from "./usage";
+
+const THREAD_SCHEMA_VERSION = 1;
+const CONTENT_SCHEMA_VERSION = 1;
 
 const threadUsageSchema = z.object({
   inputTokens: z.number(),
@@ -49,6 +51,8 @@ const contextSizeSchema = z.object({
 });
 
 const threadRecordSchema: z.ZodType<ThreadRecord> = z.object({
+  schemaVersion: z.literal(THREAD_SCHEMA_VERSION),
+  contentSchemaVersion: z.literal(CONTENT_SCHEMA_VERSION),
   id: z.string(),
   history: z.array(threadMessageRecordSchema),
   activeHistory: z.array(threadMessageRecordSchema),
@@ -60,35 +64,167 @@ const threadRecordSchema: z.ZodType<ThreadRecord> = z.object({
   deletedAt: z.string().nullable(),
 });
 
-const persistedStateSchema = z.object({
-  version: z.literal(1),
-  threads: z.array(threadRecordSchema),
-});
-
-type PersistedState = z.infer<typeof persistedStateSchema>;
-
 export interface FileThreadRepositoryOptions {
+  fs: FS;
   filePath: string;
   pricingCalculator?: ThreadPricingCalculator;
 }
 
-export class FileThreadRepository implements ThreadRepository {
-  private readonly filePath: string;
-  private readonly pricingCalculator?: ThreadPricingCalculator;
-  private readonly compactor: ThreadCompactor;
-  private writeQueue: Promise<void>;
+export function createFileThreadRepository(
+  options: FileThreadRepositoryOptions,
+): ThreadRepository {
+  const fs = options.fs;
+  const workspaceRootAbsolute = fs.resolvePath(".");
+  const rootDirAbsolute = fs.resolvePath(options.filePath);
+  const rootDir = toWorkspaceRelativePath(
+    rootDirAbsolute,
+    workspaceRootAbsolute,
+  );
+  const pricingCalculator = options.pricingCalculator;
+  const compactor = new ThreadCompactor();
+  let writeQueue: Promise<void> = Promise.resolve();
 
-  constructor(options: FileThreadRepositoryOptions) {
-    this.filePath = options.filePath;
-    this.pricingCalculator = options.pricingCalculator;
-    this.compactor = new ThreadCompactor();
-    this.writeQueue = Promise.resolve();
+  function recalculateUsageAndContext(thread: ThreadRecord): ThreadRecord {
+    return {
+      ...thread,
+      usage: aggregateThreadUsage(thread.history),
+      contextSize: aggregateContextSize(thread.history),
+    };
   }
 
-  async createThread(params?: CreateThreadParams): Promise<ThreadRecord> {
+  function ensureThreadId(threadId: string): void {
+    const valid = /^[A-Za-z0-9_-]+$/.test(threadId);
+    if (!valid) {
+      throw new ThreadPersistenceError(
+        "INVALID_STATE",
+        `Invalid thread id: ${threadId}`,
+      );
+    }
+  }
+
+  function threadFilePath(threadId: string): string {
+    ensureThreadId(threadId);
+    const fileName = `thread.${threadId}.jsonc`;
+    return `/${fileName}`;
+  }
+
+  function isThreadFile(name: string): boolean {
+    return /^thread\.[A-Za-z0-9_-]+\.jsonc$/.test(name);
+  }
+
+  async function withLock<T>(task: () => Promise<T>): Promise<T> {
+    const previous = writeQueue;
+    let release: () => void = () => {};
+
+    writeQueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    await previous;
+
+    try {
+      return await task();
+    } finally {
+      release();
+    }
+  }
+
+  async function waitForPendingWrites(): Promise<void> {
+    await writeQueue;
+  }
+
+  async function readThreadFile(filePath: string): Promise<ThreadRecord> {
+    try {
+      const raw = await fs.readFile(filePath);
+      const parsed = JSON.parse(raw) as unknown;
+      const result = threadRecordSchema.safeParse(parsed);
+
+      if (!result.success) {
+        throw new ThreadPersistenceError(
+          "VALIDATION_ERROR",
+          `Invalid persisted thread state: ${result.error.message}`,
+          result.error,
+        );
+      }
+
+      return result.data;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw error;
+      }
+
+      if (error instanceof ThreadPersistenceError) {
+        throw error;
+      }
+
+      if (error instanceof SyntaxError) {
+        throw new ThreadPersistenceError(
+          "VALIDATION_ERROR",
+          "Persisted thread state is not valid JSON.",
+          error,
+        );
+      }
+
+      throw new ThreadPersistenceError(
+        "READ_ERROR",
+        `Failed to read persisted thread state from ${filePath}.`,
+        error,
+      );
+    }
+  }
+
+  async function readThread(threadId: string): Promise<ThreadRecord | null> {
+    const filePath = threadFilePath(threadId);
+
+    try {
+      return await readThreadFile(filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
+  async function writeThread(thread: ThreadRecord): Promise<void> {
+    const validated = threadRecordSchema.safeParse(thread);
+    if (!validated.success) {
+      throw new ThreadPersistenceError(
+        "VALIDATION_ERROR",
+        `Refusing to write invalid state: ${validated.error.message}`,
+        validated.error,
+      );
+    }
+
+    const filePath = threadFilePath(thread.id);
+    const tempPath = `${filePath}.${randomUUID()}.tmp`;
+    const payload = JSON.stringify(validated.data, null, 2);
+
+    try {
+      await fs.writeFile(tempPath, payload);
+      await fs.writeFile(filePath, payload);
+      await fs.remove(tempPath);
+    } catch (error) {
+      throw new ThreadPersistenceError(
+        "WRITE_ERROR",
+        `Failed to write persisted thread state for ${thread.id}.`,
+        error,
+      );
+    }
+  }
+
+  async function createThread(
+    params?: CreateThreadParams,
+  ): Promise<ThreadRecord> {
     const now = params?.createdAt ?? new Date().toISOString();
+    const threadId = params?.id ?? randomUUID();
+    ensureThreadId(threadId);
+
     const thread: ThreadRecord = {
-      id: params?.id ?? randomUUID(),
+      schemaVersion: THREAD_SCHEMA_VERSION,
+      contentSchemaVersion: CONTENT_SCHEMA_VERSION,
+      id: threadId,
       history: [],
       activeHistory: [],
       lastCompactionOrdinal: null,
@@ -99,50 +235,68 @@ export class FileThreadRepository implements ThreadRepository {
       deletedAt: null,
     };
 
-    return this.withLock(async () => {
-      const state = await this.readState();
-      state.threads.push(thread);
-      await this.writeState(state);
+    return withLock(async () => {
+      const existing = await readThread(thread.id);
+      if (existing) {
+        throw new ThreadPersistenceError(
+          "INVALID_STATE",
+          `Thread already exists: ${thread.id}`,
+        );
+      }
+
+      await writeThread(thread);
       return thread;
     });
   }
 
-  async getThread(threadId: string): Promise<ThreadRecord | null> {
-    await this.waitForPendingWrites();
-    const state = await this.readState();
-    const thread = state.threads.find((item) => item.id === threadId);
-    return thread ?? null;
+  async function getThread(threadId: string): Promise<ThreadRecord | null> {
+    await waitForPendingWrites();
+    return readThread(threadId);
   }
 
-  async listThreads(params?: {
+  async function listThreads(params?: {
     includeDeleted?: boolean;
   }): Promise<ThreadRecord[]> {
-    await this.waitForPendingWrites();
-    const state = await this.readState();
-    const includeDeleted = params?.includeDeleted ?? false;
+    await waitForPendingWrites();
 
-    return state.threads
+    let entries: { name: string; isDirectory: boolean }[];
+    try {
+      entries = await fs.readdir(rootDir);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return [];
+      }
+
+      throw new ThreadPersistenceError(
+        "READ_ERROR",
+        `Failed to list thread files in ${rootDir}.`,
+        error,
+      );
+    }
+
+    const includeDeleted = params?.includeDeleted ?? false;
+    const threadFiles = entries
+      .filter((entry) => !entry.isDirectory && isThreadFile(entry.name))
+      .map((entry) => `${rootDir}/${entry.name}`);
+
+    const threads = await Promise.all(
+      threadFiles.map((path) => readThreadFile(path)),
+    );
+
+    return threads
       .filter((thread) => includeDeleted || thread.deletedAt === null)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  async saveMessage(
+  async function saveMessage(
     threadId: string,
     payload: SaveThreadMessageParams,
   ): Promise<ThreadRecord | null> {
     const now = payload.updatedAt ?? new Date().toISOString();
 
-    return this.withLock(async () => {
-      const state = await this.readState();
-      const threadIndex = state.threads.findIndex(
-        (item) => item.id === threadId,
-      );
+    return withLock(async () => {
+      const thread = await readThread(threadId);
 
-      if (threadIndex < 0) {
-        return null;
-      }
-
-      const thread = state.threads[threadIndex];
       if (!thread) {
         return null;
       }
@@ -161,7 +315,7 @@ export class FileThreadRepository implements ThreadRepository {
           outputTokens: payload.usage.outputTokens,
           explicitCostUsd: payload.usage.totalCostUsd,
           modelId: payload.modelId,
-          pricingCalculator: this.pricingCalculator,
+          pricingCalculator,
         }),
       };
 
@@ -184,30 +338,20 @@ export class FileThreadRepository implements ThreadRepository {
         updatedAt: now,
       };
 
-      const withUsageAndContext =
-        this.recalculateUsageAndContext(updatedThread);
-      state.threads[threadIndex] = withUsageAndContext;
-      await this.writeState(state);
+      const withUsageAndContext = recalculateUsageAndContext(updatedThread);
+      await writeThread(withUsageAndContext);
 
       return withUsageAndContext;
     });
   }
 
-  async softDeleteThread(
+  async function softDeleteThread(
     threadId: string,
     options?: { deletedAt?: string },
   ): Promise<boolean> {
-    return this.withLock(async () => {
-      const state = await this.readState();
-      const threadIndex = state.threads.findIndex(
-        (item) => item.id === threadId,
-      );
+    return withLock(async () => {
+      const thread = await readThread(threadId);
 
-      if (threadIndex < 0) {
-        return false;
-      }
-
-      const thread = state.threads[threadIndex];
       if (!thread) {
         return false;
       }
@@ -216,34 +360,26 @@ export class FileThreadRepository implements ThreadRepository {
         return true;
       }
 
-      state.threads[threadIndex] = {
+      const updated: ThreadRecord = {
         ...thread,
         deletedAt: options?.deletedAt ?? new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
-      await this.writeState(state);
+      await writeThread(updated);
       return true;
     });
   }
 
-  async rebuildActiveHistory(
+  async function rebuildActiveHistory(
     threadId: string,
     options?: { now?: string },
   ): Promise<ThreadRecord | null> {
     const now = options?.now ?? new Date().toISOString();
 
-    return this.withLock(async () => {
-      const state = await this.readState();
-      const threadIndex = state.threads.findIndex(
-        (item) => item.id === threadId,
-      );
+    return withLock(async () => {
+      const thread = await readThread(threadId);
 
-      if (threadIndex < 0) {
-        return null;
-      }
-
-      const thread = state.threads[threadIndex];
       if (!thread) {
         return null;
       }
@@ -251,6 +387,7 @@ export class FileThreadRepository implements ThreadRepository {
       const activeHistory = thread.history.filter(
         (message) => message.deletedAt === null,
       );
+
       const updatedThread: ThreadRecord = {
         ...thread,
         activeHistory,
@@ -258,40 +395,29 @@ export class FileThreadRepository implements ThreadRepository {
         updatedAt: now,
       };
 
-      const withUsageAndContext =
-        this.recalculateUsageAndContext(updatedThread);
-      state.threads[threadIndex] = withUsageAndContext;
-      await this.writeState(state);
+      const withUsageAndContext = recalculateUsageAndContext(updatedThread);
+      await writeThread(withUsageAndContext);
 
       return withUsageAndContext;
     });
   }
 
-  async compactIfNeeded(
+  async function compactIfNeeded(
     threadId: string,
     options: CompactThreadOptions,
   ): Promise<CompactThreadResult | null> {
-    return this.withLock(async () => {
-      const state = await this.readState();
-      const threadIndex = state.threads.findIndex(
-        (item) => item.id === threadId,
-      );
+    return withLock(async () => {
+      const thread = await readThread(threadId);
 
-      if (threadIndex < 0) {
-        return null;
-      }
-
-      const thread = state.threads[threadIndex];
       if (!thread) {
         return null;
       }
 
-      const compacted = await this.compactor.compactIfNeeded(thread, options);
-      const nextThread = this.recalculateUsageAndContext(compacted.thread);
-      state.threads[threadIndex] = nextThread;
+      const compacted = await compactor.compactIfNeeded(thread, options);
+      const nextThread = recalculateUsageAndContext(compacted.thread);
 
       if (compacted.didCompact) {
-        await this.writeState(state);
+        await writeThread(nextThread);
       }
 
       return {
@@ -301,18 +427,12 @@ export class FileThreadRepository implements ThreadRepository {
     });
   }
 
-  async updateThreadUsage(threadId: string): Promise<ThreadRecord | null> {
-    return this.withLock(async () => {
-      const state = await this.readState();
-      const threadIndex = state.threads.findIndex(
-        (item) => item.id === threadId,
-      );
+  async function updateThreadUsage(
+    threadId: string,
+  ): Promise<ThreadRecord | null> {
+    return withLock(async () => {
+      const thread = await readThread(threadId);
 
-      if (threadIndex < 0) {
-        return null;
-      }
-
-      const thread = state.threads[threadIndex];
       if (!thread) {
         return null;
       }
@@ -323,25 +443,17 @@ export class FileThreadRepository implements ThreadRepository {
         updatedAt: new Date().toISOString(),
       };
 
-      state.threads[threadIndex] = updatedThread;
-      await this.writeState(state);
-
+      await writeThread(updatedThread);
       return updatedThread;
     });
   }
 
-  async updateContextSize(threadId: string): Promise<ThreadRecord | null> {
-    return this.withLock(async () => {
-      const state = await this.readState();
-      const threadIndex = state.threads.findIndex(
-        (item) => item.id === threadId,
-      );
+  async function updateContextSize(
+    threadId: string,
+  ): Promise<ThreadRecord | null> {
+    return withLock(async () => {
+      const thread = await readThread(threadId);
 
-      if (threadIndex < 0) {
-        return null;
-      }
-
-      const thread = state.threads[threadIndex];
       if (!thread) {
         return null;
       }
@@ -352,111 +464,36 @@ export class FileThreadRepository implements ThreadRepository {
         updatedAt: new Date().toISOString(),
       };
 
-      state.threads[threadIndex] = updatedThread;
-      await this.writeState(state);
-
+      await writeThread(updatedThread);
       return updatedThread;
     });
   }
 
-  private recalculateUsageAndContext(thread: ThreadRecord): ThreadRecord {
-    return {
-      ...thread,
-      usage: aggregateThreadUsage(thread.history),
-      contextSize: aggregateContextSize(thread.history),
-    };
+  return {
+    createThread,
+    getThread,
+    listThreads,
+    saveMessage,
+    softDeleteThread,
+    rebuildActiveHistory,
+    compactIfNeeded,
+    updateThreadUsage,
+    updateContextSize,
+  };
+}
+
+function toWorkspaceRelativePath(path: string, root: string): string {
+  if (path === root) {
+    return ".";
   }
 
-  private async withLock<T>(task: () => Promise<T>): Promise<T> {
-    const previous = this.writeQueue;
-    let release: () => void = () => {};
-
-    this.writeQueue = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-
-    await previous;
-
-    try {
-      return await task();
-    } finally {
-      release();
-    }
+  const prefix = `${root}/`;
+  if (path.startsWith(prefix)) {
+    return path.slice(prefix.length);
   }
 
-  private async waitForPendingWrites(): Promise<void> {
-    await this.writeQueue;
-  }
-
-  private async readState(): Promise<PersistedState> {
-    try {
-      const raw = await readFile(this.filePath, "utf8");
-      const parsed = JSON.parse(raw) as unknown;
-      const result = persistedStateSchema.safeParse(parsed);
-
-      if (!result.success) {
-        throw new ThreadPersistenceError(
-          "VALIDATION_ERROR",
-          `Invalid persisted thread state: ${result.error.message}`,
-          result.error,
-        );
-      }
-
-      return result.data;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return {
-          version: 1,
-          threads: [],
-        };
-      }
-
-      if (error instanceof ThreadPersistenceError) {
-        throw error;
-      }
-
-      if (error instanceof SyntaxError) {
-        throw new ThreadPersistenceError(
-          "VALIDATION_ERROR",
-          "Persisted thread state is not valid JSON.",
-          error,
-        );
-      }
-
-      throw new ThreadPersistenceError(
-        "READ_ERROR",
-        "Failed to read persisted thread state.",
-        error,
-      );
-    }
-  }
-
-  private async writeState(state: PersistedState): Promise<void> {
-    try {
-      const result = persistedStateSchema.safeParse(state);
-      if (!result.success) {
-        throw new ThreadPersistenceError(
-          "VALIDATION_ERROR",
-          `Refusing to write invalid state: ${result.error.message}`,
-          result.error,
-        );
-      }
-
-      await mkdir(path.dirname(this.filePath), { recursive: true });
-      const tempPath = `${this.filePath}.${randomUUID()}.tmp`;
-      const payload = JSON.stringify(result.data, null, 2);
-      await writeFile(tempPath, payload, "utf8");
-      await rename(tempPath, this.filePath);
-    } catch (error) {
-      if (error instanceof ThreadPersistenceError) {
-        throw error;
-      }
-
-      throw new ThreadPersistenceError(
-        "WRITE_ERROR",
-        "Failed to write persisted thread state.",
-        error,
-      );
-    }
-  }
+  throw new ThreadPersistenceError(
+    "INVALID_STATE",
+    `Resolved path "${path}" is outside workspace root "${root}".`,
+  );
 }

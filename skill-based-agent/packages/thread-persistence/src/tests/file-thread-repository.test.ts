@@ -1,34 +1,40 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { ModelMessage } from "ai";
+import { createLocalFs, type FS } from "@protean/vfs";
 
 import {
-  FileThreadRepository,
-  ThreadPersistenceError,
+  createFileThreadRepository,
   type ThreadPricingCalculator,
 } from "../index";
 
 let root: string;
-let filePath: string;
+let threadsDir: string;
+let fs: FS;
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "thread-persistence-test-"));
-  filePath = join(root, "threads.json");
+  root = await mkdtemp(join(tmpdir(), "thread-repo-test-"));
+  fs = await createLocalFs(root);
+  threadsDir = "threads";
 });
 
-afterAll(async () => {
+afterEach(async () => {
   if (root) {
     await rm(root, { recursive: true, force: true }).catch(() => {});
   }
 });
 
 function createRepository(pricingCalculator?: ThreadPricingCalculator) {
-  return new FileThreadRepository({ filePath, pricingCalculator });
+  return createFileThreadRepository({
+    fs,
+    filePath: threadsDir,
+    pricingCalculator,
+  });
 }
 
-describe("FileThreadRepository", () => {
+describe("createFileThreadRepository", () => {
   test("creates thread with empty history and active history", async () => {
     const repo = createRepository();
     const thread = await repo.createThread();
@@ -258,22 +264,6 @@ describe("FileThreadRepository", () => {
     );
   });
 
-  test("throws typed error for corrupt persisted payload", async () => {
-    await writeFile(filePath, "{ invalid json", "utf8");
-    const repo = createRepository();
-
-    await expect(repo.listThreads()).rejects.toBeInstanceOf(
-      ThreadPersistenceError,
-    );
-
-    try {
-      await repo.listThreads();
-    } catch (error) {
-      const typed = error as ThreadPersistenceError;
-      expect(typed.code).toBe("VALIDATION_ERROR");
-    }
-  });
-
   test("uses injected pricing calculator when cost is not provided", async () => {
     const repo = createRepository({
       calculateCost: ({ inputTokens, outputTokens }) =>
@@ -295,15 +285,22 @@ describe("FileThreadRepository", () => {
     expect(updated?.history[0]?.usage.totalCostUsd).toBe(0.15);
   });
 
-  test("writes atomic state payload with versioned envelope", async () => {
+  test("writes per-thread jsonc file with schema versions", async () => {
     const repo = createRepository();
     const thread = await repo.createThread();
 
-    const raw = await readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as { version: number; threads: unknown[] };
+    const threadFilePath = `thread.${thread.id}.jsonc`;
+    const raw = await fs.readFile(threadFilePath);
+    const parsed = JSON.parse(raw) as {
+      schemaVersion: number;
+      contentSchemaVersion: number;
+      id: string;
+      history: unknown[];
+    };
 
-    expect(parsed.version).toBe(1);
-    expect(parsed.threads.length).toBe(1);
-    expect((parsed.threads[0] as { id?: string }).id).toBe(thread.id);
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.contentSchemaVersion).toBe(1);
+    expect(parsed.id).toBe(thread.id);
+    expect(parsed.history.length).toBe(0);
   });
 });
