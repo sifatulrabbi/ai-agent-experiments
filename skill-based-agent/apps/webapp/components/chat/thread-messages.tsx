@@ -6,11 +6,12 @@ import {
   CheckCircle2Icon,
   CheckIcon,
   CopyIcon,
+  BrainIcon,
   MessageSquareIcon,
   PencilIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -24,7 +25,11 @@ import {
   MessageContent,
   MessageToolbar,
 } from "@/components/ai-elements/message";
-import type { AIModelProviderEntry } from "@/components/chat/model-catalog";
+import {
+  getModelById,
+  type AIModelProviderEntry,
+  type ReasoningBudget,
+} from "@/components/chat/model-catalog";
 import { ModelProviderDropdown } from "@/components/chat/model-provider-dropdown";
 import { ThreadMessageParts } from "@/components/chat/thread-message-parts";
 import {
@@ -40,15 +45,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 interface ThreadMessagesProps {
   currentModelSelection: { modelId: string; providerId: string };
+  currentThinkingBudget: ReasoningBudget;
   messages: UIMessage[];
   onEditUserMessage: (payload: {
     messageId: string;
     modelSelection?: { modelId: string; providerId: string };
+    reasoningBudget?: ReasoningBudget;
     text: string;
   }) => Promise<void>;
   onRerunAssistantMessage: (payload: {
@@ -69,6 +89,7 @@ function getMessageText(message: UIMessage): string {
 
 export function ThreadMessages({
   currentModelSelection,
+  currentThinkingBudget,
   messages,
   status,
   onEditUserMessage,
@@ -82,6 +103,8 @@ export function ThreadMessages({
     modelId: string;
     providerId: string;
   } | null>(null);
+  const [editReasoningBudget, setEditReasoningBudget] =
+    useState<ReasoningBudget | null>(null);
   const [rerunMessageId, setRerunMessageId] = useState<string | null>(null);
   const [rerunModelSelection, setRerunModelSelection] = useState<{
     modelId: string;
@@ -95,6 +118,29 @@ export function ThreadMessages({
   const toastTimeoutRef = useRef<number | null>(null);
 
   const isBusy = status === "submitted" || status === "streaming";
+  const effectiveEditModelSelection = editModelSelection ?? currentModelSelection;
+  const selectedEditModel = useMemo(
+    () =>
+      getModelById(
+        providers,
+        effectiveEditModelSelection.providerId,
+        effectiveEditModelSelection.modelId,
+      ),
+    [
+      effectiveEditModelSelection.modelId,
+      effectiveEditModelSelection.providerId,
+      providers,
+    ],
+  );
+  const availableEditReasoningBudgets = useMemo(
+    () => selectedEditModel?.reasoning.budgets ?? [],
+    [selectedEditModel],
+  );
+  const supportsEditThinking = availableEditReasoningBudgets.some(
+    (budget) => budget !== "none",
+  );
+  const activeEditReasoningBudget =
+    editReasoningBudget ?? selectedEditModel?.reasoning.defaultValue ?? "none";
 
   const showToast = useCallback(
     (nextToast: {
@@ -148,15 +194,32 @@ export function ThreadMessages({
       setEditingMessageId(message.id);
       setEditValue(getMessageText(message));
       setEditModelSelection(currentModelSelection);
+      setEditReasoningBudget(currentThinkingBudget);
     },
-    [currentModelSelection],
+    [currentModelSelection, currentThinkingBudget],
   );
 
   const cancelEdit = useCallback(() => {
     setEditingMessageId(null);
     setEditValue("");
     setEditModelSelection(null);
+    setEditReasoningBudget(null);
   }, []);
+
+  useEffect(() => {
+    if (!selectedEditModel) {
+      return;
+    }
+
+    if (!editReasoningBudget) {
+      setEditReasoningBudget(selectedEditModel.reasoning.defaultValue);
+      return;
+    }
+
+    if (!selectedEditModel.reasoning.budgets.includes(editReasoningBudget)) {
+      setEditReasoningBudget(selectedEditModel.reasoning.defaultValue);
+    }
+  }, [editReasoningBudget, selectedEditModel]);
 
   const saveEdit = useCallback(async () => {
     if (!editingMessageId) return;
@@ -164,6 +227,8 @@ export function ThreadMessages({
     const payload = {
       messageId: editingMessageId,
       modelSelection: editModelSelection ?? currentModelSelection,
+      reasoningBudget:
+        editReasoningBudget ?? selectedEditModel?.reasoning.defaultValue,
       text: editValue,
     };
 
@@ -187,8 +252,10 @@ export function ThreadMessages({
     cancelEdit,
     currentModelSelection,
     editModelSelection,
+    editReasoningBudget,
     editValue,
     editingMessageId,
+    selectedEditModel?.reasoning.defaultValue,
     onEditUserMessage,
     showToast,
   ]);
@@ -281,12 +348,73 @@ export function ThreadMessages({
                         <span className="text-muted-foreground text-xs">
                           Model for rerun
                         </span>
-                        <ModelProviderDropdown
-                          disabled={isBusy}
-                          onChange={setEditModelSelection}
-                          providers={providers}
-                          value={editModelSelection ?? currentModelSelection}
-                        />
+                        <div className="flex items-center gap-2">
+                          <ModelProviderDropdown
+                            disabled={isBusy}
+                            onChange={setEditModelSelection}
+                            providers={providers}
+                            value={editModelSelection ?? currentModelSelection}
+                          />
+                          {supportsEditThinking ? (
+                            <>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    className="h-8 w-8 px-0 sm:hidden"
+                                    disabled={isBusy}
+                                    size="sm"
+                                    type="button"
+                                    variant="outline"
+                                  >
+                                    <BrainIcon className="size-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {availableEditReasoningBudgets.map((budget) => (
+                                    <DropdownMenuItem
+                                      className="flex items-center justify-between gap-2"
+                                      key={budget}
+                                      onSelect={() => setEditReasoningBudget(budget)}
+                                    >
+                                      <span>
+                                        {budget === "none"
+                                          ? "None"
+                                          : `${budget[0]?.toUpperCase()}${budget.slice(1)}`}
+                                      </span>
+                                      {budget === activeEditReasoningBudget ? (
+                                        <CheckIcon className="size-4 text-muted-foreground" />
+                                      ) : null}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+
+                              <Select
+                                onValueChange={(value) =>
+                                  setEditReasoningBudget(value as ReasoningBudget)
+                                }
+                                value={activeEditReasoningBudget}
+                              >
+                                <SelectTrigger
+                                  className="hidden h-8 w-30 gap-2 text-xs sm:flex"
+                                  size="sm"
+                                >
+                                  <BrainIcon className="size-3.5" />
+                                  <SelectValue placeholder="Thinking" />
+                                </SelectTrigger>
+                                <SelectContent align="start">
+                                  {availableEditReasoningBudgets.map((budget) => (
+                                    <SelectItem key={budget} value={budget}>
+                                      {budget === "none"
+                                        ? "None"
+                                        : `${budget[0]?.toUpperCase()}${budget.slice(1)}`}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </>
+                          ) : null}
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2">

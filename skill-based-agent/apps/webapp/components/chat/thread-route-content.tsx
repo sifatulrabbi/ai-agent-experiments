@@ -56,6 +56,7 @@ export function ThreadRouteContent({
           modelId: selectedModelId,
           providerId: selectedProviderId,
         }}
+        currentThinkingBudget={thinkingBudget}
         onEditUserMessage={handleEditUserMessage}
         onRerunAssistantMessage={handleRerunAssistantMessage}
         messages={messages}

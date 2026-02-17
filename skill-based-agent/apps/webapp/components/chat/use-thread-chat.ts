@@ -44,6 +44,7 @@ interface UseThreadChatResult {
   handleEditUserMessage: (payload: {
     messageId: string;
     modelSelection?: { modelId: string; providerId: string };
+    reasoningBudget?: ReasoningBudget;
     text: string;
   }) => Promise<void>;
   handleModelChange: (selection: {
@@ -156,37 +157,40 @@ export function useThreadChat({
   );
 
   const resolveInvocationModelSelection = useCallback(
-    (selection?: {
-      modelId: string;
-      providerId: string;
+    (args?: {
+      modelSelection?: { modelId: string; providerId: string };
+      reasoningBudget?: ReasoningBudget;
     }): ThreadModelSelection | undefined => {
-      if (!selection) {
+      const hasModelOverride = Boolean(args?.modelSelection);
+      const hasBudgetOverride = Boolean(args?.reasoningBudget);
+
+      if (!hasModelOverride && !hasBudgetOverride) {
         return undefined;
       }
 
-      const reasoning = getModelReasoningById(
+      return resolveModelSelection(
         providers,
-        selection.providerId,
-        selection.modelId,
+        {
+          modelId: selectedModelRef.current,
+          providerId: selectedProviderRef.current,
+          reasoningBudget: thinkingBudgetRef.current,
+        },
+        {
+          modelId: args?.modelSelection?.modelId,
+          providerId: args?.modelSelection?.providerId,
+          reasoningBudget: args?.reasoningBudget,
+        },
       );
-
-      const reasoningBudget = reasoning?.defaultValue ?? "none";
-
-      return {
-        modelId: selection.modelId,
-        providerId: selection.providerId,
-        reasoningBudget,
-      };
     },
     [providers],
   );
 
   const applyInvocationModelSelection = useCallback(
-    async (selection?: {
-      modelId: string;
-      providerId: string;
+    async (args?: {
+      modelSelection?: { modelId: string; providerId: string };
+      reasoningBudget?: ReasoningBudget;
     }): Promise<ThreadModelSelection | undefined> => {
-      const resolvedSelection = resolveInvocationModelSelection(selection);
+      const resolvedSelection = resolveInvocationModelSelection(args);
 
       if (!resolvedSelection) {
         return undefined;
@@ -321,10 +325,12 @@ export function useThreadChat({
     async ({
       messageId,
       modelSelection,
+      reasoningBudget,
       text,
     }: {
       messageId: string;
       modelSelection?: { modelId: string; providerId: string };
+      reasoningBudget?: ReasoningBudget;
       text: string;
     }) => {
       const trimmedText = text.trim();
@@ -333,7 +339,10 @@ export function useThreadChat({
       }
 
       const invocationModelSelection =
-        await applyInvocationModelSelection(modelSelection);
+        await applyInvocationModelSelection({
+          modelSelection,
+          reasoningBudget,
+        });
 
       await sendMessage(
         {
@@ -362,7 +371,7 @@ export function useThreadChat({
       modelSelection?: { modelId: string; providerId: string };
     }) => {
       const invocationModelSelection =
-        await applyInvocationModelSelection(modelSelection);
+        await applyInvocationModelSelection({ modelSelection });
 
       await regenerate({
         ...(invocationModelSelection
