@@ -1,7 +1,10 @@
 import { z } from "zod";
 import type { ReasoningBudget } from "@/components/chat/model-catalog";
 import type { ThreadModelSelection } from "@/lib/server/chat-repository";
-import { findModel, getDefaultModelSelection } from "@/lib/server/models/model-catalog";
+import {
+  findModel,
+  getDefaultModelSelection,
+} from "@/lib/server/models/model-catalog";
 
 export interface IncomingModelSelection {
   providerId: string;
@@ -95,11 +98,11 @@ export function resolveModelSelection(args: {
   threadSelection?: ThreadModelSelection;
 }): ThreadModelSelection {
   const defaultSelection = getDefaultModelSelection();
-  const candidates: (IncomingModelSelection | ThreadModelSelection | undefined)[] = [
-    args.requestSelection,
-    args.threadSelection,
-    defaultSelection,
-  ];
+  const candidates: (
+    | IncomingModelSelection
+    | ThreadModelSelection
+    | undefined
+  )[] = [args.requestSelection, args.threadSelection, defaultSelection];
 
   for (const candidate of candidates) {
     if (!candidate) {

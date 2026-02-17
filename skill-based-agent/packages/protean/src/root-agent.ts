@@ -1,4 +1,4 @@
-import { openrouter } from "@openrouter/ai-sdk-provider";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { tavilySearch, tavilyExtract } from "@tavily/ai-sdk";
 import { consoleLogger } from "@protean/logger";
 import { type Skill } from "@protean/skill";
@@ -53,8 +53,18 @@ function buildModel(config: RootAgentConfig) {
   }
 
   consoleLogger.debug("Model config:", config);
+  consoleLogger.debug(process.env.OPENROUTER_API_KEY || "No API key!");
 
-  return openrouter(config.modelId, {
+  const openRouterProvider = createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    headers: {
+      "HTTP-Referer":
+        process.env.OPENROUTER_SITE_URL || "http://localhost:3004",
+      "X-Title": process.env.OPENROUTER_SITE_NAME || "protean-chatapp",
+    },
+  });
+
+  return openRouterProvider(config.modelId, {
     reasoning: {
       effort: config.reasoningBudget,
     },

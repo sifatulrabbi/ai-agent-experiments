@@ -2,13 +2,15 @@
 
 import type { UIMessage } from "ai";
 import {
+  AlertCircleIcon,
+  CheckCircle2Icon,
   CheckIcon,
   CopyIcon,
   MessageSquareIcon,
   PencilIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -38,6 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 
 interface ThreadMessagesProps {
@@ -84,8 +87,41 @@ export function ThreadMessages({
     modelId: string;
     providerId: string;
   } | null>(null);
+  const [toastState, setToastState] = useState<{
+    description?: string;
+    title: string;
+    variant: "default" | "destructive";
+  } | null>(null);
+  const toastTimeoutRef = useRef<number | null>(null);
 
   const isBusy = status === "submitted" || status === "streaming";
+
+  const showToast = useCallback(
+    (nextToast: {
+      description?: string;
+      title: string;
+      variant: "default" | "destructive";
+    }) => {
+      setToastState(nextToast);
+
+      if (toastTimeoutRef.current !== null) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
+
+      toastTimeoutRef.current = window.setTimeout(() => {
+        setToastState(null);
+      }, 3000);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current !== null) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const copyMessage = useCallback(async (message: UIMessage) => {
     const text = getMessageText(message);
@@ -125,12 +161,28 @@ export function ThreadMessages({
   const saveEdit = useCallback(async () => {
     if (!editingMessageId) return;
 
-    await onEditUserMessage({
+    const payload = {
       messageId: editingMessageId,
       modelSelection: editModelSelection ?? currentModelSelection,
       text: editValue,
-    });
+    };
+
     cancelEdit();
+
+    try {
+      await onEditUserMessage(payload);
+      showToast({
+        title: "Message updated",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error("Failed to save edited message", error);
+      showToast({
+        description: "Please try again.",
+        title: "Could not save message",
+        variant: "destructive",
+      });
+    }
   }, [
     cancelEdit,
     currentModelSelection,
@@ -138,6 +190,7 @@ export function ThreadMessages({
     editValue,
     editingMessageId,
     onEditUserMessage,
+    showToast,
   ]);
 
   const openRerunDialog = useCallback(
@@ -158,18 +211,34 @@ export function ThreadMessages({
       return;
     }
 
-    await onRerunAssistantMessage({
+    const payload = {
       messageId: rerunMessageId,
       modelSelection: rerunModelSelection ?? currentModelSelection,
-    });
+    };
 
     closeRerunDialog();
+
+    try {
+      await onRerunAssistantMessage(payload);
+      showToast({
+        title: "Rerun started",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error("Failed to rerun assistant message", error);
+      showToast({
+        description: "Please try again.",
+        title: "Could not rerun response",
+        variant: "destructive",
+      });
+    }
   }, [
     closeRerunDialog,
     currentModelSelection,
     onRerunAssistantMessage,
     rerunMessageId,
     rerunModelSelection,
+    showToast,
   ]);
 
   return (
@@ -222,7 +291,9 @@ export function ThreadMessages({
 
                       <div className="flex items-center gap-2">
                         <Button
-                          disabled={isBusy || !editValue.trim() || !hasMessageId}
+                          disabled={
+                            isBusy || !editValue.trim() || !hasMessageId
+                          }
                           onClick={() => {
                             void saveEdit();
                           }}
@@ -345,6 +416,25 @@ export function ThreadMessages({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {toastState ? (
+        <div className="pointer-events-none fixed right-4 bottom-4 z-50 w-[min(360px,calc(100vw-2rem))]">
+          <Alert
+            className="border shadow-lg"
+            variant={toastState.variant}
+          >
+            {toastState.variant === "destructive" ? (
+              <AlertCircleIcon className="size-4" />
+            ) : (
+              <CheckCircle2Icon className="size-4" />
+            )}
+            <AlertTitle>{toastState.title}</AlertTitle>
+            {toastState.description ? (
+              <AlertDescription>{toastState.description}</AlertDescription>
+            ) : null}
+          </Alert>
+        </div>
+      ) : null}
     </>
   );
 }

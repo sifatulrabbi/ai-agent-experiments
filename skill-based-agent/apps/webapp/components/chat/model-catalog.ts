@@ -10,6 +10,15 @@ export interface AIModelEntry {
     budgets: ReasoningBudget[];
     defaultValue: ReasoningBudget;
   };
+  contextLimits: {
+    total: number;
+    maxInput: number;
+    maxOutput: number;
+  };
+  pricing: {
+    inputUsdPerMillion: number | null;
+    outputUsdPerMillion: number | null;
+  };
 }
 
 export interface AIModelProviderEntry {

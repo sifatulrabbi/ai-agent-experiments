@@ -56,7 +56,7 @@ function buildUsageDataset(): UsageDataset {
     const totalMessagesSent = 480 + index * 95;
     const totalTokensUsed = 245_000 + index * 64_000;
     const totalCostUsd = Number(
-      (totalTokensUsed / 1_000_000 * 3.2 + index * 1.8 + 4.5).toFixed(2),
+      ((totalTokensUsed / 1_000_000) * 3.2 + index * 1.8 + 4.5).toFixed(2),
     );
 
     months.push({ id: monthId, label: monthLabelFormatter.format(cursor) });

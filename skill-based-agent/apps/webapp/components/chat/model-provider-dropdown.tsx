@@ -34,6 +34,28 @@ export function ModelProviderDropdown({
     (model) => model.id === value.modelId,
   );
   const label = selectedModel ? selectedModel.name : "Select model";
+  const tokenFormatter = new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 1,
+    notation: "compact",
+  });
+  const priceFormatter = new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 4,
+    minimumFractionDigits: 0,
+    style: "currency",
+  });
+
+  function formatTokens(value: number): string {
+    return `${tokenFormatter.format(value)} tokens`;
+  }
+
+  function formatPricePerMillion(value: number | null): string {
+    if (value === null) {
+      return "N/A";
+    }
+
+    return `${priceFormatter.format(value)}/1M`;
+  }
 
   return (
     <DropdownMenu>
@@ -49,7 +71,7 @@ export function ModelProviderDropdown({
           <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72">
+      <DropdownMenuContent align="start" className="w-80">
         <DropdownMenuLabel>Choose provider and model</DropdownMenuLabel>
         {providers.map((provider) => (
           <DropdownMenuSub key={provider.id}>
@@ -63,7 +85,7 @@ export function ModelProviderDropdown({
                 ) : null}
               </span>
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-72">
+            <DropdownMenuSubContent className="w-80">
               <DropdownMenuLabel>{provider.name} models</DropdownMenuLabel>
               {provider.models.map((model) => {
                 const isSelected =
@@ -72,14 +94,21 @@ export function ModelProviderDropdown({
 
                 return (
                   <DropdownMenuItem
+                    className="items-start gap-2 py-2.5"
                     key={`${provider.id}-${model.id}`}
                     onSelect={() =>
                       onChange({ modelId: model.id, providerId: provider.id })
                     }
                   >
-                    <span className="min-w-0 flex-1 truncate">
-                      {model.name}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate">{model.name}</div>
+                      <div className="pt-0.5 text-[11px] text-muted-foreground">
+                        {`Total ${formatTokens(model.contextLimits.total)} | In ${formatTokens(model.contextLimits.maxInput)} | Out ${formatTokens(model.contextLimits.maxOutput)}`}
+                      </div>
+                      <div className="pt-0.5 text-[11px] text-muted-foreground">
+                        {`Price In ${formatPricePerMillion(model.pricing.inputUsdPerMillion)} | Out ${formatPricePerMillion(model.pricing.outputUsdPerMillion)}`}
+                      </div>
+                    </div>
                     {isSelected ? <CheckIcon className="size-4" /> : null}
                   </DropdownMenuItem>
                 );

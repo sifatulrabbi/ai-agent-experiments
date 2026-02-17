@@ -109,7 +109,7 @@ export async function createOrchestration(
     }),
     toolChoice: "auto",
     tools: allTools,
-    stopWhen: stepCountIs(50),
+    stopWhen: stepCountIs(100),
     prepareStep: async () => {
       const activeTools = alwaysActiveTools.slice();
 

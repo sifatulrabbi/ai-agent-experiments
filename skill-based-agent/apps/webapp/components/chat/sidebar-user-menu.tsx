@@ -40,9 +40,11 @@ export function SidebarUserMenu({ userName, userEmail }: SidebarUserMenuProps) {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          <SettingsIcon className="size-4" />
-          Settings
+        <DropdownMenuItem asChild>
+          <Link href="/settings">
+            <SettingsIcon className="size-4" />
+            Settings
+          </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

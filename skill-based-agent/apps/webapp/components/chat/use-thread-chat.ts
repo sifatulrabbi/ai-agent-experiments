@@ -156,12 +156,10 @@ export function useThreadChat({
   );
 
   const resolveInvocationModelSelection = useCallback(
-    (
-      selection?: {
-        modelId: string;
-        providerId: string;
-      },
-    ): ThreadModelSelection | undefined => {
+    (selection?: {
+      modelId: string;
+      providerId: string;
+    }): ThreadModelSelection | undefined => {
       if (!selection) {
         return undefined;
       }
@@ -184,12 +182,10 @@ export function useThreadChat({
   );
 
   const applyInvocationModelSelection = useCallback(
-    async (
-      selection?: {
-        modelId: string;
-        providerId: string;
-      },
-    ): Promise<ThreadModelSelection | undefined> => {
+    async (selection?: {
+      modelId: string;
+      providerId: string;
+    }): Promise<ThreadModelSelection | undefined> => {
       const resolvedSelection = resolveInvocationModelSelection(selection);
 
       if (!resolvedSelection) {
