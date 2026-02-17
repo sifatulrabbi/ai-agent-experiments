@@ -52,9 +52,14 @@ export function ThreadRouteContent({
       <ThreadHeader activeThreadId={activeThreadId} />
 
       <ThreadMessages
+        currentModelSelection={{
+          modelId: selectedModelId,
+          providerId: selectedProviderId,
+        }}
         onEditUserMessage={handleEditUserMessage}
         onRerunAssistantMessage={handleRerunAssistantMessage}
         messages={messages}
+        providers={providers}
         status={status}
       />
 

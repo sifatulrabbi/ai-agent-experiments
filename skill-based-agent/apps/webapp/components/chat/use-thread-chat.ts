@@ -43,6 +43,7 @@ interface UseThreadChatResult {
   error: Error | undefined;
   handleEditUserMessage: (payload: {
     messageId: string;
+    modelSelection?: { modelId: string; providerId: string };
     text: string;
   }) => Promise<void>;
   handleModelChange: (selection: {
@@ -51,6 +52,7 @@ interface UseThreadChatResult {
   }) => void;
   handleRerunAssistantMessage: (payload: {
     messageId: string;
+    modelSelection?: { modelId: string; providerId: string };
   }) => Promise<void>;
   handleSubmit: (payload: { text: string }) => Promise<void>;
   handleThinkingBudgetChange: (budget: ReasoningBudget) => void;
@@ -153,6 +155,64 @@ export function useThreadChat({
     [updateThreadModelSelection],
   );
 
+  const resolveInvocationModelSelection = useCallback(
+    (
+      selection?: {
+        modelId: string;
+        providerId: string;
+      },
+    ): ThreadModelSelection | undefined => {
+      if (!selection) {
+        return undefined;
+      }
+
+      const reasoning = getModelReasoningById(
+        providers,
+        selection.providerId,
+        selection.modelId,
+      );
+
+      const reasoningBudget = reasoning?.defaultValue ?? "none";
+
+      return {
+        modelId: selection.modelId,
+        providerId: selection.providerId,
+        reasoningBudget,
+      };
+    },
+    [providers],
+  );
+
+  const applyInvocationModelSelection = useCallback(
+    async (
+      selection?: {
+        modelId: string;
+        providerId: string;
+      },
+    ): Promise<ThreadModelSelection | undefined> => {
+      const resolvedSelection = resolveInvocationModelSelection(selection);
+
+      if (!resolvedSelection) {
+        return undefined;
+      }
+
+      selectedProviderRef.current = resolvedSelection.providerId;
+      selectedModelRef.current = resolvedSelection.modelId;
+      thinkingBudgetRef.current = resolvedSelection.reasoningBudget;
+
+      useThreadUiStore.getState().setModelSelection({
+        modelId: resolvedSelection.modelId,
+        providerId: resolvedSelection.providerId,
+        thinkingBudget: resolvedSelection.reasoningBudget,
+      });
+
+      await persistThreadModelSelection(resolvedSelection);
+
+      return resolvedSelection;
+    },
+    [persistThreadModelSelection, resolveInvocationModelSelection],
+  );
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport<UIMessage>({
@@ -164,22 +224,29 @@ export function useThreadChat({
           messageId,
           messages,
           trigger,
-        }) => ({
-          api,
-          body: {
-            ...body,
-            id,
-            messageId,
-            messages,
-            modelSelection: {
-              modelId: selectedModelRef.current,
-              providerId: selectedProviderRef.current,
-              reasoningBudget: thinkingBudgetRef.current,
+        }) => {
+          const bodyAsRecord = body as Record<string, unknown> | undefined;
+          const modelSelectionFromBody = bodyAsRecord?.modelSelection as
+            | ThreadModelSelection
+            | undefined;
+
+          return {
+            api,
+            body: {
+              ...body,
+              id,
+              messageId,
+              messages,
+              modelSelection: modelSelectionFromBody ?? {
+                modelId: selectedModelRef.current,
+                providerId: selectedProviderRef.current,
+                reasoningBudget: thinkingBudgetRef.current,
+              },
+              threadId: threadIdRef.current,
+              trigger,
             },
-            threadId: threadIdRef.current,
-            trigger,
-          },
-        }),
+          };
+        },
       }),
     [],
   );
@@ -255,29 +322,65 @@ export function useThreadChat({
   );
 
   const handleEditUserMessage = useCallback(
-    async ({ messageId, text }: { messageId: string; text: string }) => {
+    async ({
+      messageId,
+      modelSelection,
+      text,
+    }: {
+      messageId: string;
+      modelSelection?: { modelId: string; providerId: string };
+      text: string;
+    }) => {
       const trimmedText = text.trim();
       if (!trimmedText) {
         return;
       }
 
-      await sendMessage({
-        messageId,
-        text: trimmedText,
-      });
+      const invocationModelSelection =
+        await applyInvocationModelSelection(modelSelection);
+
+      await sendMessage(
+        {
+          messageId,
+          text: trimmedText,
+        },
+        invocationModelSelection
+          ? {
+              body: {
+                modelSelection: invocationModelSelection,
+              },
+            }
+          : undefined,
+      );
       refreshSidebar();
     },
-    [refreshSidebar, sendMessage],
+    [applyInvocationModelSelection, refreshSidebar, sendMessage],
   );
 
   const handleRerunAssistantMessage = useCallback(
-    async ({ messageId }: { messageId: string }) => {
+    async ({
+      messageId,
+      modelSelection,
+    }: {
+      messageId: string;
+      modelSelection?: { modelId: string; providerId: string };
+    }) => {
+      const invocationModelSelection =
+        await applyInvocationModelSelection(modelSelection);
+
       await regenerate({
+        ...(invocationModelSelection
+          ? {
+              body: {
+                modelSelection: invocationModelSelection,
+              },
+            }
+          : {}),
         messageId,
       });
       refreshSidebar();
     },
-    [regenerate, refreshSidebar],
+    [applyInvocationModelSelection, regenerate, refreshSidebar],
   );
 
   const handleModelChange = useCallback(
