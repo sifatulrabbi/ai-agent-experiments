@@ -36,13 +36,41 @@ const webSearchTools = {
   }),
 };
 
-export async function createRootAgent() {
-  // TODO: Never remove this. This will be in the future replaced by something cool.
+export type RootAgentRuntimeProvider = "openrouter";
+export type RootAgentReasoningBudget = "none" | "low" | "medium" | "high";
+
+export interface RootAgentConfig {
+  modelId: string;
+  reasoningBudget: RootAgentReasoningBudget;
+  runtimeProvider: string;
+}
+
+const logger = consoleLogger;
+
+function buildModel(config: RootAgentConfig) {
+  if (config.runtimeProvider !== "openrouter") {
+    throw new Error(`Unsupported runtime provider: ${config.runtimeProvider}`);
+  }
+
+  consoleLogger.debug("Model config:", config);
+
+  return openrouter(config.modelId, {
+    reasoning: {
+      effort: config.reasoningBudget,
+    },
+  });
+}
+
+export async function createRootAgent(
+  config: RootAgentConfig = {
+    modelId: "moonshotai/kimi-k2.5",
+    reasoningBudget: "medium",
+    runtimeProvider: "openrouter",
+  },
+) {
   const fs = await createFS(
     "/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project",
   );
-
-  const logger = consoleLogger;
 
   const skills: Skill<unknown>[] = [
     new WorkspaceSkill({ fsClient: fs, logger }),
@@ -112,13 +140,7 @@ export async function createRootAgent() {
 
   return createOrchestration(
     {
-      // model: openrouter("stepfun/step-3.5-flash:free", {
-      model: openrouter("moonshotai/kimi-k2.5", {
-        reasoning: {
-          enabled: true,
-          effort: "medium",
-        },
-      }),
+      model: buildModel(config),
       instructionsBuilder: buildRootAgentPrompt,
       skillsRegistry: skills,
       tools: { ...webSearchTools, ...subAgentTools },

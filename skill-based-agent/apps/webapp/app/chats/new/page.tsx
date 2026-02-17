@@ -1,5 +1,17 @@
 import { ThreadRouteContent } from "@/components/chat/thread-route-content";
+import {
+  getDefaultModelSelection,
+  getModelCatalog,
+} from "@/lib/server/models/model-catalog";
 
 export default function NewChatPage() {
-  return <ThreadRouteContent />;
+  const providers = getModelCatalog();
+  const defaultModelSelection = getDefaultModelSelection();
+
+  return (
+    <ThreadRouteContent
+      defaultModelSelection={defaultModelSelection}
+      providers={providers}
+    />
+  );
 }

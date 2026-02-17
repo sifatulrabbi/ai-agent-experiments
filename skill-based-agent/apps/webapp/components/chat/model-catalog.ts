@@ -1,9 +1,11 @@
 export type ReasoningBudget = "none" | "low" | "medium" | "high";
+export type RuntimeProvider = "openrouter";
 
 export interface AIModelEntry {
   id: string;
   name: string;
-  provider: string;
+  providerId: string;
+  runtimeProvider: RuntimeProvider;
   reasoning: {
     budgets: ReasoningBudget[];
     defaultValue: ReasoningBudget;
@@ -15,136 +17,71 @@ export interface AIModelProviderEntry {
   name: string;
   models: AIModelEntry[];
 }
-export const ModelsCatalogue: AIModelProviderEntry[] = [
-  {
-    id: "openai",
-    name: "OpenAI",
-    models: [
-      {
-        id: "openai/gpt-5.2",
-        name: "GPT-5.2",
-        reasoning: {
-          budgets: ["none", "low", "medium", "high"],
-          defaultValue: "medium",
-        },
-        provider: "openrouter",
-      },
-      {
-        id: "openai/gpt-4.1",
-        name: "GPT-4.1",
-        reasoning: {
-          budgets: ["none"],
-          defaultValue: "none",
-        },
-        provider: "openrouter",
-      },
-      {
-        id: "openai/gpt-oss-120b",
-        name: "GPT-OSS 120b",
-        reasoning: {
-          budgets: ["low", "medium", "high"],
-          defaultValue: "medium",
-        },
-        provider: "openrouter",
-      },
-    ],
-  },
-  {
-    id: "anthropic",
-    name: "Anthropic AI",
-    models: [
-      {
-        id: "anthropic/claude-opus-4.6",
-        name: "Claude Opus 4.6",
-        reasoning: {
-          budgets: ["none", "low", "medium", "high"],
-          defaultValue: "medium",
-        },
-        provider: "openrouter",
-      },
-      {
-        id: "anthropic/claude-sonnet-4.5",
-        name: "Claude 4.5 Sonnet",
-        reasoning: {
-          budgets: ["none", "low", "medium", "high"],
-          defaultValue: "medium",
-        },
-        provider: "openrouter",
-      },
-      {
-        id: "anthropic/claude-haiku-4.5",
-        name: "Claude Haiku 4.5",
-        reasoning: {
-          budgets: ["none", "low", "medium", "high"],
-          defaultValue: "medium",
-        },
-        provider: "openrouter",
-      },
-    ],
-  },
-  {
-    id: "moonshotai",
-    name: "Moonshoot AI",
-    models: [
-      {
-        id: "moonshotai/kimi-k2.5",
-        name: "Kimi K2.5",
-        reasoning: {
-          budgets: ["none", "low", "medium", "high"],
-          defaultValue: "medium",
-        },
-        provider: "openrouter",
-      },
-    ],
-  },
-  {
-    id: "google",
-    name: "Google",
-    models: [
-      {
-        id: "google/gemini-3-flash-preview",
-        name: "Gemini 3 flash preview",
-        reasoning: {
-          budgets: ["none", "low", "medium", "high"],
-          defaultValue: "medium",
-        },
-        provider: "openrouter",
-      },
-    ],
-  },
-];
 
-export const DEFAULT_CHAT_PROVIDER_ID = ModelsCatalogue[0]?.id ?? "openai";
-export const DEFAULT_CHAT_MODEL_ID =
-  ModelsCatalogue[0]?.models[0]?.id ?? "openai/gpt-5.2";
-
-export const DEFAULT_CHAT_PROVIDER_RUNTIME =
-  ModelsCatalogue[0]?.models[0]?.provider ?? "openrouter";
+export interface ModelSelectionLike {
+  providerId: string;
+  modelId: string;
+  reasoningBudget: ReasoningBudget;
+}
 
 export function getProviderById(
+  providers: AIModelProviderEntry[],
   providerId: string,
 ): AIModelProviderEntry | undefined {
-  return ModelsCatalogue.find((provider) => provider.id === providerId);
+  return providers.find((provider) => provider.id === providerId);
 }
 
 export function getModelById(
+  providers: AIModelProviderEntry[],
   providerId: string,
   modelId: string,
 ): AIModelEntry | undefined {
-  const provider = getProviderById(providerId);
+  const provider = getProviderById(providers, providerId);
   return provider?.models.find((model) => model.id === modelId);
 }
 
-export function getModelProviderRuntimeById(
-  providerId: string,
-  modelId: string,
-): string | undefined {
-  return getModelById(providerId, modelId)?.provider;
-}
-
 export function getModelReasoningById(
+  providers: AIModelProviderEntry[],
   providerId: string,
   modelId: string,
 ): AIModelEntry["reasoning"] | undefined {
-  return getModelById(providerId, modelId)?.reasoning;
+  return getModelById(providers, providerId, modelId)?.reasoning;
+}
+
+export function resolveModelSelection(
+  providers: AIModelProviderEntry[],
+  defaultSelection: ModelSelectionLike,
+  modelSelection?: Partial<ModelSelectionLike>,
+): ModelSelectionLike {
+  const providerId = modelSelection?.providerId ?? defaultSelection.providerId;
+  const modelId = modelSelection?.modelId ?? defaultSelection.modelId;
+
+  const selectedModel = getModelById(providers, providerId, modelId);
+  const fallbackModel = getModelById(
+    providers,
+    defaultSelection.providerId,
+    defaultSelection.modelId,
+  );
+
+  const resolvedModel = selectedModel ?? fallbackModel;
+
+  if (!resolvedModel) {
+    return {
+      providerId: defaultSelection.providerId,
+      modelId: defaultSelection.modelId,
+      reasoningBudget: defaultSelection.reasoningBudget,
+    };
+  }
+
+  const requestedBudget = modelSelection?.reasoningBudget;
+  const reasoningBudget =
+    requestedBudget && resolvedModel.reasoning.budgets.includes(requestedBudget)
+      ? requestedBudget
+      : resolvedModel.reasoning.defaultValue;
+
+  return {
+    providerId: resolvedModel.providerId,
+    modelId: resolvedModel.id,
+    reasoningBudget,
+  };
 }

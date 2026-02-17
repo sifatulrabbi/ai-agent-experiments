@@ -1,6 +1,10 @@
 import { auth } from "@/auth";
 import { ThreadRouteContent } from "@/components/chat/thread-route-content";
 import { chatRepository } from "@/lib/server/chat-repository";
+import {
+  getDefaultModelSelection,
+  getModelCatalog,
+} from "@/lib/server/models/model-catalog";
 import { notFound, redirect } from "next/navigation";
 
 export default async function ThreadPage({
@@ -21,12 +25,16 @@ export default async function ThreadPage({
     notFound();
   }
 
+  const providers = getModelCatalog();
+  const defaultModelSelection = getDefaultModelSelection();
+
   return (
     <ThreadRouteContent
+      defaultModelSelection={defaultModelSelection}
       initialMessages={thread.messages}
       initialModelSelection={thread.modelSelection}
       initialThreadId={thread.id}
-      initialTitle={thread.title}
+      providers={providers}
     />
   );
 }

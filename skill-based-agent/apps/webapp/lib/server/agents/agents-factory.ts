@@ -23,12 +23,12 @@ function buildProviderOpts(
 }
 
 function getAgent(modelCfg: AIModelEntry, cfg?: AgentFactoryConfig) {
-  const provider = ModelProviders.getProviderFromId(modelCfg.provider);
+  const provider = ModelProviders.getProviderFromId(modelCfg.runtimeProvider);
 
   const agent = new ToolLoopAgent({
     model: provider(modelCfg.id),
     providerOptions: buildProviderOpts(
-      modelCfg.provider,
+      modelCfg.runtimeProvider,
       cfg?.reasoningBudget || modelCfg.reasoning.defaultValue,
     ),
     instructions: Prompts.defaultPrompt(cfg?.instructions),
