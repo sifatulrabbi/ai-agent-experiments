@@ -129,15 +129,6 @@ export function ThreadPromptInput({
               </PopoverTrigger>
               <PopoverContent align="start" className="w-80 p-3">
                 <div className="space-y-2">
-                  <PromptActionRow label="Model">
-                    <ModelProviderDropdown
-                      disabled={disabled}
-                      onChange={onModelChange}
-                      providers={providers}
-                      value={modelSelection}
-                    />
-                  </PromptActionRow>
-
                   {supportsThinking ? (
                     <PromptActionRow label="Thinking">
                       <Select
@@ -184,6 +175,15 @@ export function ThreadPromptInput({
                 </div>
               </PopoverContent>
             </Popover>
+
+            <ModelProviderDropdown
+              disabled={disabled}
+              maxLabelLength={28}
+              onChange={onModelChange}
+              providers={providers}
+              triggerMode="pill"
+              value={modelSelection}
+            />
           </div>
 
           <PromptInputSubmit

@@ -142,9 +142,7 @@ function buildContextLimitsFromOpenRouterModel(
   };
 }
 
-function toUsdPerMillion(
-  value: string | number | undefined,
-): number | null {
+function toUsdPerMillion(value: string | number | undefined): number | null {
   if (value === undefined) {
     return null;
   }
@@ -227,17 +225,24 @@ for (const provider of providers) {
 }
 
 const defaultModelSelection = (() => {
-  const firstProvider = providers[0];
-  const firstModel = firstProvider?.models[0];
+  const provider = providers.find((p) => p.id === "stepfun");
 
-  if (!firstProvider || !firstModel) {
+  let model = provider?.models.find(
+    (m) => m.id === "stepfun/step-3.5-flash:free",
+  );
+  // in case the free is not available anymore
+  if (!model && provider) {
+    model = provider?.models.find((m) => m.id === "stepfun/step-3.5-flash");
+  }
+
+  if (!provider || !model) {
     throw new Error("Model catalog is empty");
   }
 
   return {
-    providerId: firstProvider.id,
-    modelId: firstModel.id,
-    reasoningBudget: firstModel.reasoning.defaultValue,
+    providerId: provider.id,
+    modelId: model.id,
+    reasoningBudget: model.reasoning.defaultValue,
   } satisfies ThreadModelSelection;
 })();
 

@@ -1,4 +1,7 @@
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import {
+  createOpenRouter,
+  OpenRouterProviderOptions,
+} from "@openrouter/ai-sdk-provider";
 import { tavilySearch, tavilyExtract } from "@tavily/ai-sdk";
 import { consoleLogger } from "@protean/logger";
 import { type Skill } from "@protean/skill";
@@ -64,10 +67,20 @@ function buildModel(config: RootAgentConfig) {
     },
   });
 
-  return openRouterProvider(config.modelId, {
-    reasoning: {
+  let reasoning: OpenRouterProviderOptions["reasoning"] = {
+    enabled: false,
+    effort: "none",
+  };
+
+  if (config.reasoningBudget !== "none") {
+    reasoning = {
+      enabled: true,
       effort: config.reasoningBudget,
-    },
+    };
+  }
+
+  return openRouterProvider(config.modelId, {
+    reasoning,
   });
 }
 
@@ -150,6 +163,7 @@ export async function createRootAgent(
 
   return createOrchestration(
     {
+      agentId: "root-agent",
       model: buildModel(config),
       instructionsBuilder: buildRootAgentPrompt,
       skillsRegistry: skills,

@@ -18,6 +18,7 @@ export interface OrchestratorConfig {
     skillFrontmatters: { id: string; frontmatter: string }[];
   }) => string;
   tools?: { [k: string]: Tool };
+  agentId?: string;
 }
 
 export async function createOrchestration(
@@ -100,6 +101,7 @@ export async function createOrchestration(
   alwaysActiveTools.push("Skill");
 
   const agent = new ToolLoopAgent({
+    id: cfg.agentId || undefined,
     model: cfg.model,
     instructions: cfg.instructionsBuilder({
       skillFrontmatters: cfg.skillsRegistry.map(({ id, frontmatter }) => ({
@@ -109,6 +111,7 @@ export async function createOrchestration(
     }),
     toolChoice: "auto",
     tools: allTools,
+    activeTools: alwaysActiveTools.slice(),
     stopWhen: stepCountIs(100),
     prepareStep: async () => {
       const activeTools = alwaysActiveTools.slice();
