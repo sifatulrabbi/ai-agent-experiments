@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, type ReactNode } from "react";
-import { PaperclipIcon, BrainIcon, MoreHorizontalIcon } from "lucide-react";
+import {
+  CheckIcon,
+  PaperclipIcon,
+  BrainIcon,
+  MoreHorizontalIcon,
+} from "lucide-react";
 import type {
   AIModelProviderEntry,
   ReasoningBudget,
@@ -14,9 +19,14 @@ import {
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
-  PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverContent,
@@ -117,10 +127,9 @@ export function ThreadPromptInput({
         <PromptInputBody>
           <PromptInputTextarea placeholder="Ask anything..." />
         </PromptInputBody>
+
         <PromptInputFooter>
           <div className="flex items-center gap-2">
-            <PromptInputTools />
-
             <Popover>
               <PopoverTrigger asChild>
                 <Button size="sm" type="button" variant="outline">
@@ -129,31 +138,6 @@ export function ThreadPromptInput({
               </PopoverTrigger>
               <PopoverContent align="start" className="w-80 p-3">
                 <div className="space-y-2">
-                  {supportsThinking ? (
-                    <PromptActionRow label="Thinking">
-                      <Select
-                        onValueChange={(value) =>
-                          onThinkingBudgetChange(value as ReasoningBudget)
-                        }
-                        value={thinkingBudget}
-                      >
-                        <SelectTrigger className="h-8 gap-2 text-xs" size="sm">
-                          <BrainIcon className="size-3.5" />
-                          <SelectValue placeholder="Thinking" />
-                        </SelectTrigger>
-                        <SelectContent align="start">
-                          {availableReasoningBudgets.map((budget) => (
-                            <SelectItem key={budget} value={budget}>
-                              {budget === "none"
-                                ? "None"
-                                : `${budget[0]?.toUpperCase()}${budget.slice(1)}`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </PromptActionRow>
-                  ) : null}
-
                   <PromptActionRow label="Attach files">
                     <Button disabled size="sm" type="button" variant="outline">
                       <PaperclipIcon className="size-4" />
@@ -184,6 +168,65 @@ export function ThreadPromptInput({
               triggerMode="pill"
               value={modelSelection}
             />
+
+            {supportsThinking ? (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      className="h-8 w-8 px-0 sm:hidden"
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <BrainIcon className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {availableReasoningBudgets.map((budget) => (
+                      <DropdownMenuItem
+                        className="flex items-center justify-between gap-2"
+                        key={budget}
+                        onSelect={() => onThinkingBudgetChange(budget)}
+                      >
+                        <span>
+                          {budget === "none"
+                            ? "None"
+                            : `${budget[0]?.toUpperCase()}${budget.slice(1)}`}
+                        </span>
+                        {budget === thinkingBudget ? (
+                          <CheckIcon className="size-4 text-muted-foreground" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Select
+                  onValueChange={(value) =>
+                    onThinkingBudgetChange(value as ReasoningBudget)
+                  }
+                  value={thinkingBudget}
+                >
+                  <SelectTrigger
+                    className="hidden h-8 w-30 gap-2 rounded-md text-xs sm:flex"
+                    size="sm"
+                  >
+                    <BrainIcon className="size-3.5" />
+                    <SelectValue placeholder="Thinking" />
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {availableReasoningBudgets.map((budget) => (
+                      <SelectItem key={budget} value={budget}>
+                        {budget === "none"
+                          ? "None"
+                          : `${budget[0]?.toUpperCase()}${budget.slice(1)}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            ) : null}
           </div>
 
           <PromptInputSubmit

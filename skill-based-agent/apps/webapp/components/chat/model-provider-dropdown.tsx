@@ -25,6 +25,13 @@ interface ModelProviderDropdownProps {
   value: { modelId: string; providerId: string };
 }
 
+function parseModelLabel(modelLabel: string) {
+  if (modelLabel.includes(": ")) {
+    return modelLabel.split(": ")[1];
+  }
+  return modelLabel;
+}
+
 export function ModelProviderDropdown({
   disabled,
   maxLabelLength,
@@ -41,7 +48,7 @@ export function ModelProviderDropdown({
     (model) => model.id === value.modelId,
   );
   const modelLabel = selectedModel ? selectedModel.name : "Select model";
-  const triggerLabel = modelLabel;
+  const triggerLabel = parseModelLabel(modelLabel);
   const tokenFormatter = new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 1,
     notation: "compact",
@@ -100,7 +107,7 @@ export function ModelProviderDropdown({
           className={
             triggerMode === "icon"
               ? "h-8 w-8 px-0"
-              : "h-8 max-w-45 justify-between gap-2 text-xs"
+              : "h-8 max-w-25 md:max-w-55 justify-between gap-2 text-xs"
           }
           disabled={disabled}
           size="sm"
@@ -183,7 +190,10 @@ export function ModelProviderDropdown({
                         className="items-start gap-2 py-2.5"
                         key={`${provider.id}-${model.id}`}
                         onSelect={() =>
-                          onChange({ modelId: model.id, providerId: provider.id })
+                          onChange({
+                            modelId: model.id,
+                            providerId: provider.id,
+                          })
                         }
                       >
                         <div className="min-w-0 flex-1">
