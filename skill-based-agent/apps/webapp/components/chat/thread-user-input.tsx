@@ -7,10 +7,7 @@ import {
   BrainIcon,
   MoreHorizontalIcon,
 } from "lucide-react";
-import type {
-  AIModelProviderEntry,
-  ReasoningBudget,
-} from "@/components/chat/model-catalog";
+import type { AIModelProviderEntry } from "@/components/chat/model-catalog";
 import { getModelById } from "@/components/chat/model-catalog";
 import { ModelProviderDropdown } from "@/components/chat/model-provider-dropdown";
 import {
@@ -49,10 +46,10 @@ interface ThreadPromptInputProps {
   onModelChange: (selection: { modelId: string; providerId: string }) => void;
   onStop: () => void;
   onSubmit: (payload: { text: string }) => Promise<void> | void;
-  onThinkingBudgetChange: (budget: ReasoningBudget) => void;
+  onThinkingBudgetChange: (budget: string) => void;
   providers: AIModelProviderEntry[];
   status: ThreadStatus;
-  thinkingBudget: ReasoningBudget;
+  thinkingBudget: string;
 }
 
 function PromptActionRow({
@@ -103,13 +100,11 @@ export function ThreadPromptInput({
       ),
     [modelSelection.modelId, modelSelection.providerId, providers],
   );
-  const availableReasoningBudgets = useMemo(
+  const availablestrings = useMemo(
     () => selectedModel?.reasoning.budgets ?? [],
     [selectedModel],
   );
-  const supportsThinking = availableReasoningBudgets.some(
-    (budget) => budget !== "none",
-  );
+  const supportsThinking = availablestrings.some((budget) => budget !== "none");
 
   useEffect(() => {
     if (!selectedModel) {
@@ -183,7 +178,7 @@ export function ThreadPromptInput({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {availableReasoningBudgets.map((budget) => (
+                    {availablestrings.map((budget) => (
                       <DropdownMenuItem
                         className="flex items-center justify-between gap-2"
                         key={budget}
@@ -204,7 +199,7 @@ export function ThreadPromptInput({
 
                 <Select
                   onValueChange={(value) =>
-                    onThinkingBudgetChange(value as ReasoningBudget)
+                    onThinkingBudgetChange(value as string)
                   }
                   value={thinkingBudget}
                 >
@@ -216,7 +211,7 @@ export function ThreadPromptInput({
                     <SelectValue placeholder="Thinking" />
                   </SelectTrigger>
                   <SelectContent align="start">
-                    {availableReasoningBudgets.map((budget) => (
+                    {availablestrings.map((budget) => (
                       <SelectItem key={budget} value={budget}>
                         {budget === "none"
                           ? "None"

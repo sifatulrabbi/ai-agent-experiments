@@ -1,4 +1,3 @@
-export type ReasoningBudget = "none" | "low" | "medium" | "high";
 export type RuntimeProvider = "openrouter";
 
 export interface AIModelEntry {
@@ -7,8 +6,8 @@ export interface AIModelEntry {
   providerId: string;
   runtimeProvider: RuntimeProvider;
   reasoning: {
-    budgets: ReasoningBudget[];
-    defaultValue: ReasoningBudget;
+    budgets: string[];
+    defaultValue: string;
   };
   contextLimits: {
     total: number;
@@ -30,7 +29,7 @@ export interface AIModelProviderEntry {
 export interface ModelSelectionLike {
   providerId: string;
   modelId: string;
-  reasoningBudget: ReasoningBudget;
+  reasoningBudget: string;
 }
 
 export function getProviderById(

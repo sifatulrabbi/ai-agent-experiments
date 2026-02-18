@@ -122,7 +122,7 @@ export interface FsMemoryOptions {
   /** Virtual (or real) filesystem adapter used for all I/O. */
   fs: FS;
   /**
-   * Directory where thread `.jsonc` files are stored.
+   * Directory where thread `.json` files are stored.
    * @default ".threads"
    */
   dirPath?: string;
@@ -133,8 +133,8 @@ export interface FsMemoryOptions {
 /**
  * Creates an {@link FsMemory} backed by any `FS`-compatible filesystem.
  *
- * Each thread is stored as a single `.jsonc` file named
- * `thread.<id>.jsonc` inside `dirPath`. All mutating operations are
+ * Each thread is stored as a single `.json` file named
+ * `thread.<id>.json` inside `dirPath`. All mutating operations are
  * serialised through an in-process write queue (`withLock`) to prevent
  * concurrent writes from producing corrupt files.
  */
@@ -169,16 +169,16 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
     }
   }
 
-  /** Returns the absolute path for a given thread id, e.g. `.threads/thread.abc123.jsonc`. */
+  /** Returns the absolute path for a given thread id, e.g. `.threads/thread.abc123.json`. */
   function threadFilePath(threadId: string): string {
     ensureThreadId(threadId);
-    const fileName = `thread.${threadId}.jsonc`;
+    const fileName = `thread.${threadId}.json`;
     return `${rootDir}/${fileName}`;
   }
 
-  /** Returns `true` if a filename matches the expected `thread.<id>.jsonc` pattern. */
+  /** Returns `true` if a filename matches the expected `thread.<id>.json` pattern. */
   function isThreadFile(name: string): boolean {
-    return /^thread\.[A-Za-z0-9_-]+\.jsonc$/.test(name);
+    return /^thread\.[A-Za-z0-9_-]+\.json$/.test(name);
   }
 
   /**

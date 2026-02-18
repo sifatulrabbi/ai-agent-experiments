@@ -40,7 +40,7 @@ export interface ThreadMessageRecord {
 }
 
 /**
- * The root object written to each `.threads/thread.<id>.jsonc` file.
+ * The root object written to each `.threads/thread.<id>.json` file.
  *
  * - `history`        — immutable append-only log of every message ever saved.
  * - `activeHistory`  — subset of `history` used as the model's context window;

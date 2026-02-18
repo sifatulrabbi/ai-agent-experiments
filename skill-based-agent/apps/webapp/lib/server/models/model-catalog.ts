@@ -3,7 +3,6 @@ import catalogJson from "./models.catalog.json";
 import type {
   AIModelEntry,
   AIModelProviderEntry,
-  ReasoningBudget,
   RuntimeProvider,
 } from "@/components/chat/model-catalog";
 import type { ThreadModelSelection } from "@/lib/server/models/model-selection";
@@ -174,8 +173,8 @@ const providers: AIModelProviderEntry[] = parsedLegacyCatalog
         providerId: model.providerId,
         runtimeProvider: model.runtimeProvider as RuntimeProvider,
         reasoning: {
-          budgets: model.reasoning.budgets as ReasoningBudget[],
-          defaultValue: model.reasoning.defaultValue as ReasoningBudget,
+          budgets: model.reasoning.budgets,
+          defaultValue: model.reasoning.defaultValue,
         },
         contextLimits: model.contextLimits ?? {
           total: 0,
@@ -196,7 +195,7 @@ const providers: AIModelProviderEntry[] = parsedLegacyCatalog
           const modelSupportsReasoning = supportsReasoning(
             model.supported_parameters ?? [],
           );
-          const budgets: ReasoningBudget[] = modelSupportsReasoning
+          const budgets = modelSupportsReasoning
             ? ["none", "low", "medium", "high"]
             : ["none"];
 

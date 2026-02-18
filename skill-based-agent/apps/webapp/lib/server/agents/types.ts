@@ -1,4 +1,3 @@
-import { type ReasoningBudget } from "@/components/chat/model-catalog";
 import type {
   AssistantModelMessage,
   ToolModelMessage,
@@ -11,7 +10,7 @@ export interface PromptVarsDefault {
 }
 
 export interface AgentFactoryConfig {
-  reasoningBudget?: ReasoningBudget;
+  reasoningBudget?: string;
   outputVerbosity?: string;
   instructions?: PromptVarsDefault;
 }

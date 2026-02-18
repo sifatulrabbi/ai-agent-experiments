@@ -10,7 +10,6 @@ import {
   resolveModelSelection,
   type ModelSelectionLike,
   type AIModelProviderEntry,
-  type ReasoningBudget,
 } from "@/components/chat/model-catalog";
 import { useThreadApi } from "@/components/chat/use-thread-api";
 import { useThreadUiStore } from "@/components/chat/thread-ui-store";
@@ -63,7 +62,7 @@ interface UseThreadChatResult {
   handleEditUserMessage: (payload: {
     messageId: string;
     modelSelection?: { modelId: string; providerId: string };
-    reasoningBudget?: ReasoningBudget;
+    reasoningBudget?: string;
     text: string;
   }) => Promise<void>;
   handleModelChange: (selection: {
@@ -75,14 +74,14 @@ interface UseThreadChatResult {
     modelSelection?: { modelId: string; providerId: string };
   }) => Promise<void>;
   handleSubmit: (payload: { text: string }) => Promise<void>;
-  handleThinkingBudgetChange: (budget: ReasoningBudget) => void;
+  handleThinkingBudgetChange: (budget: string) => void;
   isCreatingThread: boolean;
   messages: UIMessage[];
   selectedModelId: string;
   selectedProviderId: string;
   status: ThreadStatus;
   stop: () => void;
-  thinkingBudget: ReasoningBudget;
+  thinkingBudget: string;
 }
 
 export function useThreadChat({
@@ -180,7 +179,7 @@ export function useThreadChat({
   const resolveInvocationModelSelection = useCallback(
     (args?: {
       modelSelection?: { modelId: string; providerId: string };
-      reasoningBudget?: ReasoningBudget;
+      reasoningBudget?: string;
     }): ModelSelectionLike | undefined => {
       const hasModelOverride = Boolean(args?.modelSelection);
       const hasBudgetOverride = Boolean(args?.reasoningBudget);
@@ -209,7 +208,7 @@ export function useThreadChat({
   const applyInvocationModelSelection = useCallback(
     async (args?: {
       modelSelection?: { modelId: string; providerId: string };
-      reasoningBudget?: ReasoningBudget;
+      reasoningBudget?: string;
     }): Promise<ModelSelectionLike | undefined> => {
       const resolvedSelection = resolveInvocationModelSelection(args);
 
@@ -351,7 +350,7 @@ export function useThreadChat({
     }: {
       messageId: string;
       modelSelection?: { modelId: string; providerId: string };
-      reasoningBudget?: ReasoningBudget;
+      reasoningBudget?: string;
       text: string;
     }) => {
       const trimmedText = text.trim();
@@ -430,7 +429,7 @@ export function useThreadChat({
   );
 
   const handleThinkingBudgetChange = useCallback(
-    (budget: ReasoningBudget) => {
+    (budget: string) => {
       useThreadUiStore.getState().setThinkingBudget(budget);
 
       void persistThreadModelSelection({

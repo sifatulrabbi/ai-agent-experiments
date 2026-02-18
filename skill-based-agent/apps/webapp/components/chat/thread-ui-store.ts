@@ -1,8 +1,6 @@
 "use client";
 
 import { create } from "zustand";
-import type { ReasoningBudget } from "@/components/chat/model-catalog";
-
 interface ThreadUiStore {
   activeThreadId: string | null;
   deepResearchEnabled: boolean;
@@ -10,12 +8,12 @@ interface ThreadUiStore {
   isCreatingThread: boolean;
   selectedModelId: string;
   selectedProviderId: string;
-  thinkingBudget: ReasoningBudget;
+  thinkingBudget: string;
   hydrateFromRoute: (args: {
     threadId: string | null;
     modelId: string;
     providerId: string;
-    reasoningBudget: ReasoningBudget;
+    reasoningBudget: string;
   }) => void;
   setActiveThreadId: (threadId: string | null) => void;
   setDeepResearchEnabled: (enabled: boolean) => void;
@@ -24,9 +22,9 @@ interface ThreadUiStore {
   setModelSelection: (args: {
     modelId: string;
     providerId: string;
-    thinkingBudget?: ReasoningBudget;
+    thinkingBudget?: string;
   }) => void;
-  setThinkingBudget: (budget: ReasoningBudget) => void;
+  setThinkingBudget: (budget: string) => void;
 }
 
 export const useThreadUiStore = create<ThreadUiStore>()((set) => ({

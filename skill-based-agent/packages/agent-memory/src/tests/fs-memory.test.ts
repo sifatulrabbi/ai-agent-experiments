@@ -419,14 +419,14 @@ describe("createFsMemory", () => {
     expect(updated?.history[0]?.usage.totalCostUsd).toBe(0.15);
   });
 
-  test("writes per-thread jsonc file with schema versions", async () => {
+  test("writes per-thread json file with schema versions", async () => {
     const repo = createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
     });
 
-    const threadFilePath = `${threadsDir}/thread.${thread.id}.jsonc`;
+    const threadFilePath = `${threadsDir}/thread.${thread.id}.json`;
     const raw = await fs.readFile(threadFilePath);
     const parsed = JSON.parse(raw) as {
       schemaVersion: number;

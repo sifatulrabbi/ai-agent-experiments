@@ -28,7 +28,6 @@ import {
 import {
   getModelById,
   type AIModelProviderEntry,
-  type ReasoningBudget,
 } from "@/components/chat/model-catalog";
 import { ModelProviderDropdown } from "@/components/chat/model-provider-dropdown";
 import { ThreadMessageParts } from "@/components/chat/thread-message-parts";
@@ -63,12 +62,12 @@ import { Textarea } from "@/components/ui/textarea";
 
 interface ThreadMessagesProps {
   currentModelSelection: { modelId: string; providerId: string };
-  currentThinkingBudget: ReasoningBudget;
+  currentThinkingBudget: string;
   messages: UIMessage[];
   onEditUserMessage: (payload: {
     messageId: string;
     modelSelection?: { modelId: string; providerId: string };
-    reasoningBudget?: ReasoningBudget;
+    reasoningBudget?: string;
     text: string;
   }) => Promise<void>;
   onRerunAssistantMessage: (payload: {
@@ -103,8 +102,9 @@ export function ThreadMessages({
     modelId: string;
     providerId: string;
   } | null>(null);
-  const [editReasoningBudget, setEditReasoningBudget] =
-    useState<ReasoningBudget | null>(null);
+  const [editReasoningBudget, setEditReasoningBudget] = useState<string | null>(
+    null,
+  );
   const [rerunMessageId, setRerunMessageId] = useState<string | null>(null);
   const [rerunModelSelection, setRerunModelSelection] = useState<{
     modelId: string;
@@ -140,8 +140,13 @@ export function ThreadMessages({
   const supportsEditThinking = availableEditReasoningBudgets.some(
     (budget) => budget !== "none",
   );
-  const activeEditReasoningBudget =
-    editReasoningBudget ?? selectedEditModel?.reasoning.defaultValue ?? "none";
+  const activeEditReasoningBudget = useMemo(() => {
+    const defaultValue = selectedEditModel?.reasoning.defaultValue ?? "none";
+    if (!editReasoningBudget) return defaultValue;
+    if (!selectedEditModel?.reasoning.budgets.includes(editReasoningBudget))
+      return defaultValue;
+    return editReasoningBudget;
+  }, [editReasoningBudget, selectedEditModel]);
 
   const showToast = useCallback(
     (nextToast: {
@@ -206,21 +211,6 @@ export function ThreadMessages({
     setEditModelSelection(null);
     setEditReasoningBudget(null);
   }, []);
-
-  useEffect(() => {
-    if (!selectedEditModel) {
-      return;
-    }
-
-    if (!editReasoningBudget) {
-      setEditReasoningBudget(selectedEditModel.reasoning.defaultValue);
-      return;
-    }
-
-    if (!selectedEditModel.reasoning.budgets.includes(editReasoningBudget)) {
-      setEditReasoningBudget(selectedEditModel.reasoning.defaultValue);
-    }
-  }, [editReasoningBudget, selectedEditModel]);
 
   const saveEdit = useCallback(async () => {
     if (!editingMessageId) return;
@@ -397,9 +387,7 @@ export function ThreadMessages({
 
                               <Select
                                 onValueChange={(value) =>
-                                  setEditReasoningBudget(
-                                    value as ReasoningBudget,
-                                  )
+                                  setEditReasoningBudget(value)
                                 }
                                 value={activeEditReasoningBudget}
                               >
