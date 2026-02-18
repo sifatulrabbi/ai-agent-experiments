@@ -27,6 +27,7 @@ import {
 const THREAD_SCHEMA_VERSION = 1;
 /** Bumped when the shape of the stored `ModelMessage` content changes. */
 const CONTENT_SCHEMA_VERSION = 1;
+const threadIdSchema = z.uuid();
 
 const threadUsageSchema = z.object({
   inputTokens: z.number(),
@@ -55,7 +56,7 @@ const contextSizeSchema = z.object({
 const threadRecordSchema: z.ZodType<ThreadRecord> = z.object({
   schemaVersion: z.literal(THREAD_SCHEMA_VERSION),
   contentSchemaVersion: z.literal(CONTENT_SCHEMA_VERSION),
-  id: z.string(),
+  id: threadIdSchema,
   history: z.array(threadMessageRecordSchema),
   activeHistory: z.array(threadMessageRecordSchema),
   lastCompactionOrdinal: z.number().int().min(1).nullable(),
@@ -106,14 +107,10 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
     };
   }
 
-  /**
-   * Throws `INVALID_STATE` if `threadId` contains characters outside
-   * `[A-Za-z0-9_-]`. This prevents path-traversal attacks and ensures
-   * the id maps cleanly to a filename.
-   */
+  /** Validates thread IDs with zod UUID rules before any file-path usage. */
   function ensureThreadId(threadId: string): void {
-    const valid = /^[A-Za-z0-9_-]+$/.test(threadId);
-    if (!valid) {
+    const result = threadIdSchema.safeParse(threadId);
+    if (!result.success) {
       throw new ThreadMemoryError(
         "INVALID_STATE",
         `Invalid thread id: ${threadId}`,
