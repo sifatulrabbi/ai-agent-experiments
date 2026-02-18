@@ -3,8 +3,8 @@ import { modelMessageSchema } from "ai";
 import { z } from "zod";
 import type { FileEntry, FS } from "@protean/vfs";
 
-import { ThreadCompactor } from "./compaction";
-import { ThreadPersistenceError } from "./errors";
+import { createHistoryCompactor } from "./compaction";
+import { ThreadMemoryError } from "./errors";
 import type {
   CompactThreadOptions,
   CompactThreadResult,
@@ -13,7 +13,7 @@ import type {
   ThreadMessageRecord,
   ThreadPricingCalculator,
   ThreadRecord,
-  ThreadRepository,
+  FsMemory,
 } from "./types";
 import {
   aggregateContextSize,
@@ -23,7 +23,9 @@ import {
   resolveMessageCost,
 } from "./usage";
 
+/** Bumped when the shape of `ThreadRecord` itself changes in a breaking way. */
 const THREAD_SCHEMA_VERSION = 1;
+/** Bumped when the shape of the stored `ModelMessage` content changes. */
 const CONTENT_SCHEMA_VERSION = 1;
 
 const threadUsageSchema = z.object({
@@ -64,24 +66,38 @@ const threadRecordSchema: z.ZodType<ThreadRecord> = z.object({
   deletedAt: z.string().nullable(),
 });
 
-export interface FileThreadRepositoryOptions {
+export interface FsMemoryOptions {
+  /** Virtual (or real) filesystem adapter used for all I/O. */
   fs: FS;
   /**
-   *  Default is `.threads`
+   * Directory where thread `.jsonc` files are stored.
+   * @default ".threads"
    */
   dirPath?: string;
+  /** Optional cost calculator injected for per-message USD estimates. */
   pricingCalculator?: ThreadPricingCalculator;
 }
 
-export function createFileThreadRepository(
-  options: FileThreadRepositoryOptions,
-): ThreadRepository {
+/**
+ * Creates an {@link FsMemory} backed by any `FS`-compatible filesystem.
+ *
+ * Each thread is stored as a single `.jsonc` file named
+ * `thread.<id>.jsonc` inside `dirPath`. All mutating operations are
+ * serialised through an in-process write queue (`withLock`) to prevent
+ * concurrent writes from producing corrupt files.
+ */
+export function createFsMemory(options: FsMemoryOptions): FsMemory {
   const fs = options.fs;
   const pricingCalculator = options.pricingCalculator;
   const rootDir = options.dirPath || ".threads";
-  const compactor = new ThreadCompactor();
+  const compactor = createHistoryCompactor();
+  // Single-entry async queue that serialises all write operations.
   let writeQueue: Promise<void> = Promise.resolve();
 
+  /**
+   * Recomputes `usage` and `contextSize` from the thread's full `history`.
+   * Called after every mutation so the persisted file always has fresh totals.
+   */
   function recalculateUsageAndContext(thread: ThreadRecord): ThreadRecord {
     return {
       ...thread,
@@ -90,26 +106,39 @@ export function createFileThreadRepository(
     };
   }
 
+  /**
+   * Throws `INVALID_STATE` if `threadId` contains characters outside
+   * `[A-Za-z0-9_-]`. This prevents path-traversal attacks and ensures
+   * the id maps cleanly to a filename.
+   */
   function ensureThreadId(threadId: string): void {
     const valid = /^[A-Za-z0-9_-]+$/.test(threadId);
     if (!valid) {
-      throw new ThreadPersistenceError(
+      throw new ThreadMemoryError(
         "INVALID_STATE",
         `Invalid thread id: ${threadId}`,
       );
     }
   }
 
+  /** Returns the absolute path for a given thread id, e.g. `.threads/thread.abc123.jsonc`. */
   function threadFilePath(threadId: string): string {
     ensureThreadId(threadId);
     const fileName = `thread.${threadId}.jsonc`;
     return `${rootDir}/${fileName}`;
   }
 
+  /** Returns `true` if a filename matches the expected `thread.<id>.jsonc` pattern. */
   function isThreadFile(name: string): boolean {
     return /^thread\.[A-Za-z0-9_-]+\.jsonc$/.test(name);
   }
 
+  /**
+   * Runs `task` exclusively, ensuring no other write can interleave.
+   *
+   * Works by chaining each new task onto the tail of `writeQueue`.
+   * The `release` callback advances the queue to the next waiting task.
+   */
   async function withLock<T>(task: () => Promise<T>): Promise<T> {
     const previous = writeQueue;
     let release: () => void = () => {};
@@ -127,10 +156,20 @@ export function createFileThreadRepository(
     }
   }
 
+  /**
+   * Waits until the current write queue drains before performing a read.
+   * This guarantees that reads always see the result of the most recent write.
+   */
   async function waitForPendingWrites(): Promise<void> {
     await writeQueue;
   }
 
+  /**
+   * Reads and validates a thread file from `filePath`.
+   *
+   * Throws `ENOENT` errors as-is (callers decide whether that means "not found"
+   * or "unexpected"), and maps other failures to typed {@link ThreadMemoryError}s.
+   */
   async function readThreadFile(filePath: string): Promise<ThreadRecord> {
     try {
       const raw = await fs.readFile(filePath);
@@ -138,7 +177,7 @@ export function createFileThreadRepository(
       const result = threadRecordSchema.safeParse(parsed);
 
       if (!result.success) {
-        throw new ThreadPersistenceError(
+        throw new ThreadMemoryError(
           "VALIDATION_ERROR",
           `Invalid persisted thread state: ${result.error.message}`,
           result.error,
@@ -151,19 +190,19 @@ export function createFileThreadRepository(
         throw error;
       }
 
-      if (error instanceof ThreadPersistenceError) {
+      if (error instanceof ThreadMemoryError) {
         throw error;
       }
 
       if (error instanceof SyntaxError) {
-        throw new ThreadPersistenceError(
+        throw new ThreadMemoryError(
           "VALIDATION_ERROR",
           "Persisted thread state is not valid JSON.",
           error,
         );
       }
 
-      throw new ThreadPersistenceError(
+      throw new ThreadMemoryError(
         "READ_ERROR",
         `Failed to read persisted thread state from ${filePath}.`,
         error,
@@ -171,6 +210,10 @@ export function createFileThreadRepository(
     }
   }
 
+  /**
+   * Reads a thread by id; returns `null` if the file does not exist.
+   * Re-throws any other error (e.g. permission denied, parse failure).
+   */
   async function readThread(threadId: string): Promise<ThreadRecord | null> {
     const filePath = threadFilePath(threadId);
 
@@ -185,10 +228,19 @@ export function createFileThreadRepository(
     }
   }
 
+  /**
+   * Validates then writes a thread to disk using an atomic-ish two-step:
+   * 1. Write to a uniquely named `.tmp` file.
+   * 2. Overwrite the canonical file with the same content.
+   * 3. Remove the `.tmp` file.
+   *
+   * This minimises (but does not eliminate) the window during which a crash
+   * could leave the canonical file in a corrupted state.
+   */
   async function writeThread(thread: ThreadRecord): Promise<void> {
     const validated = threadRecordSchema.safeParse(thread);
     if (!validated.success) {
-      throw new ThreadPersistenceError(
+      throw new ThreadMemoryError(
         "VALIDATION_ERROR",
         `Refusing to write invalid state: ${validated.error.message}`,
         validated.error,
@@ -204,7 +256,7 @@ export function createFileThreadRepository(
       await fs.writeFile(filePath, payload);
       await fs.remove(tempPath);
     } catch (error) {
-      throw new ThreadPersistenceError(
+      throw new ThreadMemoryError(
         "WRITE_ERROR",
         `Failed to write persisted thread state for ${thread.id}.`,
         error,
@@ -212,6 +264,10 @@ export function createFileThreadRepository(
     }
   }
 
+  /**
+   * Creates a new empty thread and persists it to disk.
+   * Throws `INVALID_STATE` if a thread with the same id already exists.
+   */
   async function createThread(
     params?: CreateThreadParams,
   ): Promise<ThreadRecord> {
@@ -236,7 +292,7 @@ export function createFileThreadRepository(
     return withLock(async () => {
       const existing = await readThread(thread.id);
       if (existing) {
-        throw new ThreadPersistenceError(
+        throw new ThreadMemoryError(
           "INVALID_STATE",
           `Thread already exists: ${thread.id}`,
         );
@@ -247,11 +303,22 @@ export function createFileThreadRepository(
     });
   }
 
+  /**
+   * Returns the thread with `threadId`, or `null` if it does not exist.
+   * Waits for any in-flight writes to complete before reading.
+   */
   async function getThread(threadId: string): Promise<ThreadRecord | null> {
     await waitForPendingWrites();
     return readThread(threadId);
   }
 
+  /**
+   * Returns all threads in `rootDir`, sorted by `updatedAt` descending.
+   *
+   * - If the directory does not exist, returns an empty array instead of throwing.
+   * - Soft-deleted threads are excluded by default; pass `{ includeDeleted: true }`
+   *   to include them.
+   */
   async function listThreads(params?: {
     includeDeleted?: boolean;
   }): Promise<ThreadRecord[]> {
@@ -265,7 +332,7 @@ export function createFileThreadRepository(
         return [];
       }
 
-      throw new ThreadPersistenceError(
+      throw new ThreadMemoryError(
         "READ_ERROR",
         `Failed to list thread files in ${rootDir}.`,
         error,
@@ -286,6 +353,15 @@ export function createFileThreadRepository(
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
+  /**
+   * Appends a new message record to both `history` and `activeHistory`,
+   * then recalculates usage and context-size totals.
+   *
+   * The `ordinal` for the new record is derived from the last entry in
+   * `history` + 1, ensuring it is always strictly increasing.
+   *
+   * Returns `null` if the thread does not exist.
+   */
   async function saveMessage(
     threadId: string,
     payload: SaveThreadMessageParams,
@@ -343,6 +419,12 @@ export function createFileThreadRepository(
     });
   }
 
+  /**
+   * Marks a thread as deleted without removing it from disk.
+   *
+   * - Returns `false` if the thread does not exist.
+   * - Returns `true` (idempotent) if the thread was already soft-deleted.
+   */
   async function softDeleteThread(
     threadId: string,
     options?: { deletedAt?: string },
@@ -354,6 +436,7 @@ export function createFileThreadRepository(
         return false;
       }
 
+      // Already deleted — treat as a no-op and report success.
       if (thread.deletedAt !== null) {
         return true;
       }
@@ -369,6 +452,13 @@ export function createFileThreadRepository(
     });
   }
 
+  /**
+   * Recomputes `activeHistory` by filtering out all soft-deleted messages
+   * from the full `history`, then resets `lastCompactionOrdinal` to `null`.
+   *
+   * Use this to "restore" a thread to its full history after an incorrect
+   * compaction, or after manually soft-deleting specific messages.
+   */
   async function rebuildActiveHistory(
     threadId: string,
     options?: { now?: string },
@@ -400,6 +490,12 @@ export function createFileThreadRepository(
     });
   }
 
+  /**
+   * Delegates to {@link HistoryCompactor.compactIfNeeded} and persists the
+   * result only when an actual compaction occurred (`didCompact: true`).
+   *
+   * Returns `null` if the thread does not exist.
+   */
   async function compactIfNeeded(
     threadId: string,
     options: CompactThreadOptions,
@@ -425,6 +521,11 @@ export function createFileThreadRepository(
     });
   }
 
+  /**
+   * Recalculates and persists the cumulative `usage` totals from the full
+   * `history`. Useful when usage data becomes out-of-sync (e.g. after a
+   * manual data repair).
+   */
   async function updateThreadUsage(
     threadId: string,
   ): Promise<ThreadRecord | null> {
@@ -446,6 +547,10 @@ export function createFileThreadRepository(
     });
   }
 
+  /**
+   * Recalculates and persists `contextSize` from the full `history`.
+   * Useful for the same repair scenarios as {@link updateThreadUsage}.
+   */
   async function updateContextSize(
     threadId: string,
   ): Promise<ThreadRecord | null> {
@@ -478,20 +583,4 @@ export function createFileThreadRepository(
     updateThreadUsage,
     updateContextSize,
   };
-}
-
-function toWorkspaceRelativePath(path: string, root: string): string {
-  if (path === root) {
-    return ".";
-  }
-
-  const prefix = `${root}/`;
-  if (path.startsWith(prefix)) {
-    return path.slice(prefix.length);
-  }
-
-  throw new ThreadPersistenceError(
-    "INVALID_STATE",
-    `Resolved path "${path}" is outside workspace root "${root}".`,
-  );
 }

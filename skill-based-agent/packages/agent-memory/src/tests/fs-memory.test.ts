@@ -5,17 +5,14 @@ import { tmpdir } from "node:os";
 import type { ModelMessage } from "ai";
 import { createLocalFs, type FS } from "@protean/vfs";
 
-import {
-  createFileThreadRepository,
-  type ThreadPricingCalculator,
-} from "../index";
+import { createFsMemory, type ThreadPricingCalculator } from "../index";
 
 let root: string;
 let threadsDir: string;
 let fs: FS;
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "thread-repo-test-"));
+  root = await mkdtemp(join(tmpdir(), "fs-memory-test-"));
   fs = await createLocalFs(root);
   threadsDir = ".threads";
 });
@@ -27,14 +24,14 @@ afterEach(async () => {
 });
 
 function createRepository(pricingCalculator?: ThreadPricingCalculator) {
-  return createFileThreadRepository({
+  return createFsMemory({
     fs,
     dirPath: threadsDir,
     pricingCalculator,
   });
 }
 
-describe("createFileThreadRepository", () => {
+describe("createFsMemory", () => {
   test("creates thread with empty history and active history", async () => {
     const repo = createRepository();
     const thread = await repo.createThread();

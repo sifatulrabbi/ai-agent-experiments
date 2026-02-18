@@ -5,6 +5,7 @@ import type {
   ThreadUsage,
 } from "./types";
 
+/** Returns a zeroed-out {@link ThreadUsage} object. Used as the initial accumulator. */
 export function emptyUsage(): ThreadUsage {
   return {
     inputTokens: 0,
@@ -14,6 +15,7 @@ export function emptyUsage(): ThreadUsage {
   };
 }
 
+/** Returns a zeroed-out {@link ContextSize} object. Used as the initial accumulator. */
 export function emptyContextSize(): ContextSize {
   return {
     totalInputTokens: 0,
@@ -21,6 +23,14 @@ export function emptyContextSize(): ContextSize {
   };
 }
 
+/**
+ * Sums token counts, duration, and cost across all non-deleted messages in `history`.
+ *
+ * Soft-deleted messages (`deletedAt !== null`) are excluded so that their
+ * tokens don't inflate the reported totals after compaction.
+ *
+ * @param history - The full `ThreadRecord.history` array.
+ */
 export function aggregateThreadUsage(
   history: ThreadMessageRecord[],
 ): ThreadUsage {
@@ -39,6 +49,15 @@ export function aggregateThreadUsage(
   );
 }
 
+/**
+ * Computes the active context-window token counts from non-deleted messages.
+ *
+ * Unlike {@link aggregateThreadUsage}, this is typically called on
+ * `activeHistory` rather than the full `history` to reflect what the model
+ * currently sees in its context window.
+ *
+ * @param history - Usually `ThreadRecord.activeHistory`.
+ */
 export function aggregateContextSize(
   history: ThreadMessageRecord[],
 ): ContextSize {
@@ -55,6 +74,14 @@ export function aggregateContextSize(
   );
 }
 
+/**
+ * Determines the USD cost for a single message.
+ *
+ * Resolution order:
+ * 1. Use `explicitCostUsd` if the caller already knows the cost (e.g. from an API response).
+ * 2. Delegate to `pricingCalculator` if one was provided at `createFsMemory` time.
+ * 3. Return `0` as a safe default when neither is available.
+ */
 export function resolveMessageCost(args: {
   inputTokens: number;
   outputTokens: number;
