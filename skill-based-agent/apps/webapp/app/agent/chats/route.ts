@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { UIMessage } from "ai";
 import { requireUserId } from "@/lib/server/auth-user";
-import { chatRepository } from "@/lib/server/chat-repository";
+import { getAgentMemory } from "@/lib/server/agent-memory";
 import {
   normalizeThreadModelSelection,
   parseStrictModelSelection,
@@ -14,8 +14,9 @@ export async function GET() {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const memory = await getAgentMemory();
   return Response.json(
-    { threads: await chatRepository.listThreads(userId) },
+    { threads: await memory.listThreads({ userId }) },
     { status: 200 },
   );
 }
@@ -52,12 +53,16 @@ export async function POST(request: Request) {
       ]
     : [];
 
-  const thread = await chatRepository.createThread({
-    messages,
-    title,
+  const memory = await getAgentMemory();
+  const thread = await memory.createThread({
     userId,
+    title: title?.trim() || "New chat",
     modelSelection,
   });
+
+  if (messages.length > 0) {
+    await memory.replaceMessages(thread.id, { messages });
+  }
 
   return Response.json({ thread }, { status: 201 });
 }

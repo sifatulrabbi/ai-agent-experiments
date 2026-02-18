@@ -5,8 +5,12 @@ import { type TuiStore } from "./store";
 
 const CHUNK_BATCH_SIZE = 8;
 
+export interface StreamAgent {
+  stream: ToolLoopAgent["stream"];
+}
+
 interface RunStreamTurnArgs {
-  agent: ToolLoopAgent;
+  agent: StreamAgent;
   store: TuiStore;
   messageStore: MessageStore;
   userText: string;

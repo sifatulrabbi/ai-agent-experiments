@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ModelMessage } from "ai";
+import type { UIMessage } from "ai";
 
 import { aggregateContextSize } from "./usage";
 import type {
@@ -15,7 +15,7 @@ import type {
  *
  * Compaction works by:
  * 1. Calling the caller-supplied `summarizeHistory` function to produce a
- *    single summary `ModelMessage` from the full history.
+ *    single summary `UIMessage` from the full history.
  * 2. Replacing `activeHistory` with a single synthetic record built from
  *    that summary, effectively resetting the context-window token count.
  * 3. Recording `lastCompactionOrdinal` so callers know how far back the
@@ -111,7 +111,7 @@ export function createHistoryCompactor(): HistoryCompactor {
 }
 
 /**
- * Wraps a summary `ModelMessage` in a `ThreadMessageRecord` suitable for
+ * Wraps a summary `UIMessage` in a `ThreadMessageRecord` suitable for
  * insertion into `activeHistory`.
  *
  * The record is always assigned `ordinal: 1` because it becomes the first
@@ -120,14 +120,15 @@ export function createHistoryCompactor(): HistoryCompactor {
  * represent a real model call.
  */
 function buildSummaryRecord(
-  message: ModelMessage,
+  message: UIMessage,
   now: string,
 ): ThreadMessageRecord {
-  // Normalise to a plain user message with text content so the model can
-  // interpret it regardless of what the summariser returned.
-  const normalized: ModelMessage = {
+  // Normalise to a plain user message with text-only parts regardless of what
+  // the summariser returned so callers can deterministically convert later.
+  const normalized: UIMessage = {
+    id: randomUUID(),
     role: "user",
-    content: toUserSummaryText(message),
+    parts: [{ type: "text", text: toUserSummaryText(message) }],
   };
 
   return {
@@ -149,43 +150,21 @@ function buildSummaryRecord(
 }
 
 /**
- * Extracts a plain string from a `ModelMessage` so it can be stored as the
+ * Extracts a plain string from a `UIMessage` so it can be stored as the
  * content of a `user`-role summary record.
  *
- * Handles three content shapes:
- * - Plain string — returned as-is.
- * - Array of content parts — text parts are concatenated; tool-call and
- *   tool-result parts are serialised to a human-readable form.
- * - Anything else (e.g. object) — falls back to the generic placeholder.
+ * Text parts are concatenated with newlines. Non-text parts are preserved as
+ * JSON snippets to avoid silently dropping potentially relevant context.
  */
-function toUserSummaryText(message: ModelMessage): string {
-  if (typeof message.content === "string") {
-    return message.content;
-  }
-
-  if (!Array.isArray(message.content)) {
-    return "Conversation summary.";
-  }
-
+function toUserSummaryText(message: UIMessage): string {
   const parts: string[] = [];
-  for (const part of message.content) {
-    if ("text" in part && typeof part.text === "string") {
+  for (const part of message.parts) {
+    if (part.type === "text" && typeof part.text === "string") {
       parts.push(part.text);
       continue;
     }
 
-    if (part.type === "tool-call") {
-      parts.push(
-        `Tool call ${part.toolName}: ${JSON.stringify(part.input ?? null)}`,
-      );
-      continue;
-    }
-
-    if (part.type === "tool-result") {
-      parts.push(
-        `Tool result ${part.toolName}: ${JSON.stringify(part.output)}`,
-      );
-    }
+    parts.push(JSON.stringify(part));
   }
 
   return parts.join("\n").trim() || "Conversation summary.";

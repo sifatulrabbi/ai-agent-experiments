@@ -6,7 +6,7 @@ import type {
   ReasoningBudget,
   RuntimeProvider,
 } from "@/components/chat/model-catalog";
-import type { ThreadModelSelection } from "@/lib/server/chat-repository";
+import type { ThreadModelSelection } from "@/lib/server/models/model-selection";
 
 const reasoningBudgetSchema = z.enum(["none", "low", "medium", "high"]);
 

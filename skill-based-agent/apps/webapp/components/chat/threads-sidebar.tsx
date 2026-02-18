@@ -11,7 +11,7 @@ import {
   StarIcon,
   Trash2Icon,
 } from "lucide-react";
-import type { ChatThread } from "@/lib/server/chat-repository";
+import type { ThreadRecord } from "@protean/agent-memory";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarUserMenu } from "@/components/chat/sidebar-user-menu";
@@ -31,7 +31,7 @@ import {
 import { useThreadApi } from "@/components/chat/use-thread-api";
 
 interface ThreadsSidebarProps {
-  threads: ChatThread[];
+  threads: ThreadRecord[];
   userEmail?: string | null;
   userName?: string | null;
 }

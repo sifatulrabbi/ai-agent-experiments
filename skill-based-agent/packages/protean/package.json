@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@openrouter/ai-sdk-provider": "^2.2.3",
+    "@protean/agent-memory": "workspace:*",
     "@protean/docx-skill": "workspace:*",
     "@protean/logger": "workspace:*",
     "@protean/pptx-skill": "workspace:*",

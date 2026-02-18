@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import type { ThreadModelSelection } from "@/lib/server/chat-repository";
+import type { ThreadModelSelection } from "@/lib/server/models/model-selection";
 
 interface CreateThreadRequest {
   modelSelection: ThreadModelSelection;

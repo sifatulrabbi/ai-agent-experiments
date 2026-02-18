@@ -1,9 +1,10 @@
 import { requireUserId } from "@/lib/server/auth-user";
-import { chatRepository } from "@/lib/server/chat-repository";
+import { getAgentMemory } from "@/lib/server/agent-memory";
 import {
   normalizeThreadModelSelection,
   parseStrictModelSelection,
 } from "@/lib/server/models/model-selection";
+import { canAccessThread } from "@/lib/server/thread-utils";
 
 export async function GET(
   _request: Request,
@@ -16,9 +17,9 @@ export async function GET(
   }
 
   const { id } = await params;
-  const thread = await chatRepository.getThread(userId, id);
-
-  if (!thread) {
+  const memory = await getAgentMemory();
+  const thread = await memory.getThread(id);
+  if (!thread || !canAccessThread(thread, userId)) {
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }
 
@@ -36,11 +37,12 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const deleted = await chatRepository.deleteThread(userId, id);
-
-  if (!deleted) {
+  const memory = await getAgentMemory();
+  const thread = await memory.getThread(id);
+  if (!thread || !canAccessThread(thread, userId)) {
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }
+  const deleted = await memory.softDeleteThread(id);
 
   return Response.json({ ok: true }, { status: 200 });
 }
@@ -65,10 +67,14 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const thread = await chatRepository.updateThreadSettings({
+  const memory = await getAgentMemory();
+  const existing = await memory.getThread(id);
+  if (!existing || !canAccessThread(existing, userId)) {
+    return Response.json({ error: "Thread not found" }, { status: 404 });
+  }
+
+  const thread = await memory.updateThreadSettings(id, {
     modelSelection: normalizeThreadModelSelection(modelSelection),
-    threadId: id,
-    userId,
   });
 
   if (!thread) {

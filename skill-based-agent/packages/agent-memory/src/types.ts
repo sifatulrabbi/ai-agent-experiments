@@ -1,4 +1,4 @@
-import type { ModelMessage } from "ai";
+import type { UIMessage } from "ai";
 
 /** Accumulated token counts and cost for a single message or an entire thread. */
 export interface ThreadUsage {
@@ -31,7 +31,7 @@ export interface ThreadMessageRecord {
   id: string;
   ordinal: number;
   version: number;
-  message: ModelMessage;
+  message: UIMessage;
   usage: ThreadUsage;
   createdAt: string;
   updatedAt: string;
@@ -54,6 +54,9 @@ export interface ThreadRecord {
   schemaVersion: number;
   contentSchemaVersion: number;
   id: string;
+  userId: string;
+  title: string;
+  modelSelection: ThreadModelSelection;
   history: ThreadMessageRecord[];
   activeHistory: ThreadMessageRecord[];
   lastCompactionOrdinal: number | null;
@@ -62,6 +65,13 @@ export interface ThreadRecord {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+}
+
+/** Persisted model/provider selection per thread. */
+export interface ThreadModelSelection {
+  providerId: string;
+  modelId: string;
+  reasoningBudget: string;
 }
 
 /** Pluggable cost estimator injected at `createFsMemory` time. */
@@ -77,17 +87,32 @@ export interface ThreadPricingCalculator {
 export interface CreateThreadParams {
   /** Provide a deterministic id instead of a random UUID. */
   id?: string;
+  userId: string;
+  title?: string;
+  modelSelection: ThreadModelSelection;
   /** Override the creation timestamp (ISO-8601). Useful in tests. */
   createdAt?: string;
+}
+
+export interface UpdateThreadSettingsParams {
+  title?: string;
+  modelSelection?: ThreadModelSelection | null;
+  now?: string;
+}
+
+export interface ReplaceThreadMessagesParams {
+  messages: UIMessage[];
+  now?: string;
 }
 
 /** Payload required to append a new message to an existing thread. */
 export interface SaveThreadMessageParams {
   /** Provide a deterministic message id instead of a random UUID. */
   id?: string;
-  message: ModelMessage;
-  /** Used by the pricing calculator when `totalCostUsd` is not provided. */
-  modelId?: string;
+  /** Persisted verbatim as a UI-layer message; convert to model messages at call time. */
+  message: UIMessage;
+  /** Used by the pricing calculator and to track what model was used for the message. */
+  modelSelection: ThreadModelSelection;
   usage: {
     inputTokens: number;
     outputTokens: number;
@@ -120,10 +145,10 @@ export interface CompactThreadOptions {
   policy: CompactionPolicy;
   /**
    * Caller-supplied function that distils the full message history into a
-   * single summary `ModelMessage`. The compactor replaces `activeHistory`
+   * single summary `UIMessage`. The compactor replaces `activeHistory`
    * with a synthetic record built from this message.
    */
-  summarizeHistory: (history: ThreadMessageRecord[]) => Promise<ModelMessage>;
+  summarizeHistory: (history: ThreadMessageRecord[]) => Promise<UIMessage>;
   /** Override the current timestamp (ISO-8601). Useful in tests. */
   now?: string;
 }
@@ -141,12 +166,19 @@ export interface CompactThreadResult {
  * prevent concurrent writes from corrupting thread files.
  */
 export interface FsMemory {
-  createThread(params?: CreateThreadParams): Promise<ThreadRecord>;
+  createThread(params: CreateThreadParams): Promise<ThreadRecord>;
   getThread(threadId: string): Promise<ThreadRecord | null>;
-  listThreads(params?: { includeDeleted?: boolean }): Promise<ThreadRecord[]>;
+  listThreads(params?: {
+    includeDeleted?: boolean;
+    userId?: string;
+  }): Promise<ThreadRecord[]>;
   saveMessage(
     threadId: string,
     payload: SaveThreadMessageParams,
+  ): Promise<ThreadRecord | null>;
+  replaceMessages(
+    threadId: string,
+    params: ReplaceThreadMessagesParams,
   ): Promise<ThreadRecord | null>;
   softDeleteThread(
     threadId: string,
@@ -161,6 +193,10 @@ export interface FsMemory {
     threadId: string,
     options: CompactThreadOptions,
   ): Promise<CompactThreadResult | null>;
+  updateThreadSettings(
+    threadId: string,
+    params: UpdateThreadSettingsParams,
+  ): Promise<ThreadRecord | null>;
   /** Recomputes cumulative usage totals from the full history. */
   updateThreadUsage(threadId: string): Promise<ThreadRecord | null>;
   /** Recomputes the active context-window token counts. */

@@ -1,5 +1,5 @@
 import { Box, Text, useApp, useInput } from "ink";
-import { type ToolLoopAgent, type ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 import { useMemo, useCallback, type ReactElement } from "react";
 
 import { type MessageStore } from "../messages";
@@ -10,10 +10,10 @@ import { TranscriptPane } from "./components/transcript-pane";
 import { InspectorPane } from "./components/inspector-pane";
 import { SplitLayout } from "./components/layout";
 import { createTuiStore } from "./store";
-import { runStreamTurn } from "./stream-adapter";
+import { runStreamTurn, type StreamAgent } from "./stream-adapter";
 
 interface TuiAppProps {
-  agent: ToolLoopAgent;
+  agent: StreamAgent;
   messageStore: MessageStore;
   initialMessages: ModelMessage[];
   debugStreamDefault: boolean;

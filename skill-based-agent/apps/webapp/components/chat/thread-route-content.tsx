@@ -7,7 +7,7 @@ import type { AIModelProviderEntry } from "@/components/chat/model-catalog";
 import { ThreadMessages } from "@/components/chat/thread-messages";
 import { ThreadPromptInput } from "@/components/chat/thread-user-input";
 import { useThreadChat } from "@/components/chat/use-thread-chat";
-import type { ThreadModelSelection } from "@/lib/server/chat-repository";
+import type { ThreadModelSelection } from "@/lib/server/models/model-selection";
 
 interface ThreadRouteContentProps {
   defaultModelSelection: ThreadModelSelection;

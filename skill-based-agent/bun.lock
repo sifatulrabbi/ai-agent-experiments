@@ -34,7 +34,9 @@
         "@ai-sdk/react": "^3.0.81",
         "@daytonaio/sdk": "^0.141.0",
         "@openrouter/ai-sdk-provider": "^2.2.3",
+        "@protean/agent-memory": "workspace:*",
         "@protean/protean": "workspace:*",
+        "@protean/vfs": "workspace:*",
         "@radix-ui/react-use-controllable-state": "^1.2.2",
         "@rive-app/react-webgl2": "^4.26.2",
         "@streamdown/cjk": "^1.0.2",
@@ -145,6 +147,7 @@
       "name": "@protean/protean",
       "dependencies": {
         "@openrouter/ai-sdk-provider": "^2.2.3",
+        "@protean/agent-memory": "workspace:*",
         "@protean/docx-skill": "workspace:*",
         "@protean/logger": "workspace:*",
         "@protean/pptx-skill": "workspace:*",

@@ -1,14 +1,15 @@
-import { createAgentUIStreamResponse, type UIMessage } from "ai";
+import { type UIMessage } from "ai";
 import { createRootAgent } from "@protean/protean";
 import { requireUserId } from "@/lib/server/auth-user";
-import { chatRepository } from "@/lib/server/chat-repository";
+import { getAgentMemory } from "@/lib/server/agent-memory";
 import { findModel } from "@/lib/server/models/model-catalog";
 import {
   isSameModelSelection,
-  parseLegacyModelSelection,
+  normalizeThreadModelSelection,
   parseLooseModelSelection,
   resolveModelSelection,
 } from "@/lib/server/models/model-selection";
+import { canAccessThread, threadToUiMessages } from "@/lib/server/thread-utils";
 
 export const maxDuration = 30;
 
@@ -70,27 +71,30 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
   const threadId = parsedBody.threadId;
+  const memory = await getAgentMemory();
 
-  const thread = await chatRepository.getThread(userId, threadId);
-
-  if (!thread) {
+  const thread = await memory.getThread(threadId);
+  if (!thread || !canAccessThread(thread, userId)) {
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }
 
-  const requestSelection =
-    parseLooseModelSelection(parsedBody.modelSelection) ??
-    parseLegacyModelSelection(parsedBody);
+  // For making sure the model selection and the reasoning budget are valid.
+  const threadSelection = normalizeThreadModelSelection({
+    providerId: thread.modelSelection.providerId,
+    modelId: thread.modelSelection.modelId,
+    reasoningBudget: thread.modelSelection.reasoningBudget,
+  });
+
+  const requestSelection = parseLooseModelSelection(parsedBody.modelSelection);
 
   const resolvedModelSelection = resolveModelSelection({
     requestSelection,
-    threadSelection: thread.modelSelection,
+    threadSelection,
   });
 
-  if (!isSameModelSelection(thread.modelSelection, resolvedModelSelection)) {
-    await chatRepository.updateThreadSettings({
+  if (!isSameModelSelection(threadSelection, resolvedModelSelection)) {
+    await memory.updateThreadSettings(threadId, {
       modelSelection: resolvedModelSelection,
-      threadId,
-      userId,
     });
   }
 
@@ -107,9 +111,10 @@ export async function POST(request: Request) {
   }
 
   let uiMessages: UIMessage[];
+  const threadMessages = threadToUiMessages(thread);
 
   if (parsedBody.invokePending) {
-    const pendingIndex = [...thread.messages]
+    const pendingIndex = [...threadMessages]
       .map((message, index) => ({ index, message }))
       .reverse()
       .find(
@@ -123,7 +128,7 @@ export async function POST(request: Request) {
       );
     }
 
-    uiMessages = thread.messages.map((message, index) =>
+    uiMessages = threadMessages.map((message, index) =>
       index === pendingIndex ? clearPendingFlag(message) : message,
     );
   } else {
@@ -134,13 +139,7 @@ export async function POST(request: Request) {
     uiMessages = parsedBody.messages;
   }
 
-  if (!parsedBody.invokePending) {
-    await chatRepository.saveMessages({
-      messages: uiMessages,
-      threadId,
-      userId,
-    });
-  }
+  await memory.replaceMessages(threadId, { messages: uiMessages });
 
   if (
     resolvedModel.runtimeProvider === "openrouter" &&
@@ -158,18 +157,65 @@ export async function POST(request: Request) {
     runtimeProvider: resolvedModel.runtimeProvider,
   });
 
-  return createAgentUIStreamResponse({
-    agent,
+  const streamSession = await agent.streamThread({
+    threadId,
     uiMessages,
+    options: {
+      modelSelection: {
+        providerId: resolvedModelSelection.providerId,
+        modelId: resolvedModelSelection.modelId,
+        reasoningBudget: resolvedModelSelection.reasoningBudget,
+      },
+      memory: {
+        memory,
+        compactionPolicy: {
+          maxContextTokens: Math.max(resolvedModel.contextLimits.total, 1),
+          reservedOutputTokens: Math.min(
+            resolvedModel.contextLimits.maxOutput,
+            4096,
+          ),
+        },
+        summarizeHistory: async (history) => {
+          // TODO: use a LLM based approach to compact the history, put the logic in the packages/protean.
+
+          const summaryText = history
+            .map((item) => {
+              const parts = item.message.parts as Array<{
+                type: string;
+                text?: string;
+              }>;
+
+              return parts
+                .filter((part) => part.type === "text")
+                .map((part) => part.text ?? "")
+                .join(" ")
+                .trim();
+            })
+            .filter((text) => text.length > 0)
+            .join("\n")
+            .slice(-4000);
+
+          return {
+            id: `summary-${Date.now()}`,
+            role: "user",
+            parts: [
+              {
+                type: "text",
+                text: summaryText || "Conversation summary.",
+              },
+            ],
+          };
+        },
+      },
+    },
+  });
+
+  return streamSession.stream.toUIMessageStreamResponse({
     sendReasoning: true,
     sendSources: false,
     originalMessages: uiMessages as never[],
     onFinish: async ({ messages }) => {
-      await chatRepository.saveMessages({
-        messages,
-        threadId,
-        userId,
-      });
+      await streamSession.persistFinish(messages);
     },
     onError: (error) => {
       if (error instanceof Error) {

@@ -29,7 +29,7 @@ describe("runStreamTurn", () => {
           messages: [{ role: "assistant", content: "hello" }],
         }),
       }),
-    } as unknown as ToolLoopAgent;
+    } as unknown as { stream: ToolLoopAgent["stream"] };
 
     await runStreamTurn({
       agent: fakeAgent,

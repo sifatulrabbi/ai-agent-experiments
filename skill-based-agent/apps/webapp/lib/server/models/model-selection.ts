@@ -1,15 +1,16 @@
 import { z } from "zod";
-import type { ReasoningBudget } from "@/components/chat/model-catalog";
-import type { ThreadModelSelection } from "@/lib/server/chat-repository";
+import type { ThreadModelSelection } from "@protean/agent-memory";
 import {
   findModel,
   getDefaultModelSelection,
 } from "@/lib/server/models/model-catalog";
 
+export type { ThreadModelSelection };
+
 export interface IncomingModelSelection {
   providerId: string;
   modelId: string;
-  reasoningBudget?: ReasoningBudget;
+  reasoningBudget?: string;
 }
 
 const strictModelSelectionSchema = z.object({
@@ -22,12 +23,6 @@ const looseModelSelectionSchema = z.object({
   modelId: z.string().min(1),
   providerId: z.string().min(1),
   reasoningBudget: z.enum(["none", "low", "medium", "high"]).optional(),
-});
-
-const legacyModelSelectionSchema = z.object({
-  modelId: z.string().min(1),
-  providerId: z.string().min(1),
-  thinkingBudget: z.enum(["none", "low", "medium", "high"]).optional(),
 });
 
 export function parseStrictModelSelection(
@@ -54,22 +49,9 @@ export function parseLooseModelSelection(
   return parsed.data;
 }
 
-export function parseLegacyModelSelection(
-  input: unknown,
-): IncomingModelSelection | undefined {
-  const parsed = legacyModelSelectionSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return undefined;
-  }
-
-  return {
-    modelId: parsed.data.modelId,
-    providerId: parsed.data.providerId,
-    reasoningBudget: parsed.data.thinkingBudget,
-  };
-}
-
+/**
+ * Ensures the model id and reasoning budget are valid
+ */
 export function normalizeThreadModelSelection(
   selection?: ThreadModelSelection,
 ): ThreadModelSelection {
@@ -87,9 +69,10 @@ export function normalizeThreadModelSelection(
   return {
     providerId: selection.providerId,
     modelId: selection.modelId,
-    reasoningBudget: model.reasoning.budgets.includes(selection.reasoningBudget)
-      ? selection.reasoningBudget
-      : model.reasoning.defaultValue,
+    reasoningBudget:
+      model.reasoning.budgets.find(
+        (budget) => budget === selection.reasoningBudget,
+      ) ?? model.reasoning.defaultValue,
   };
 }
 
@@ -116,7 +99,8 @@ export function resolveModelSelection(args: {
 
     const requestedBudget = candidate.reasoningBudget;
     const reasoningBudget =
-      requestedBudget && model.reasoning.budgets.includes(requestedBudget)
+      requestedBudget &&
+      model.reasoning.budgets.find((budget) => budget === requestedBudget)
         ? requestedBudget
         : model.reasoning.defaultValue;
 

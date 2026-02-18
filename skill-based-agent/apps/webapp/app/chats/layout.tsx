@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { ThreadsSidebar } from "@/components/chat/threads-sidebar";
-import { chatRepository } from "@/lib/server/chat-repository";
+import { getAgentMemory } from "@/lib/server/agent-memory";
 import { redirect } from "next/navigation";
 
 export default async function ChatsLayout({
@@ -20,7 +20,8 @@ export default async function ChatsLayout({
     redirect("/login");
   }
 
-  const threads = await chatRepository.listThreads(userEmail);
+  const memory = await getAgentMemory();
+  const threads = await memory.listThreads({ userId: userEmail });
 
   return (
     <div className="flex min-h-screen">

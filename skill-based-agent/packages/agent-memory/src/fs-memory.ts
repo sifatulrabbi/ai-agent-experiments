@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { modelMessageSchema } from "ai";
+import { safeValidateUIMessages, type UIMessage } from "ai";
 import { z } from "zod";
 import type { FileEntry, FS } from "@protean/vfs";
 
@@ -9,11 +9,14 @@ import type {
   CompactThreadOptions,
   CompactThreadResult,
   CreateThreadParams,
+  ReplaceThreadMessagesParams,
   SaveThreadMessageParams,
   ThreadMessageRecord,
+  ThreadModelSelection,
   ThreadPricingCalculator,
   ThreadRecord,
   FsMemory,
+  UpdateThreadSettingsParams,
 } from "./types";
 import {
   aggregateContextSize,
@@ -25,7 +28,7 @@ import {
 
 /** Bumped when the shape of `ThreadRecord` itself changes in a breaking way. */
 const THREAD_SCHEMA_VERSION = 1;
-/** Bumped when the shape of the stored `ModelMessage` content changes. */
+/** Bumped when the shape of the stored `UIMessage` content changes. */
 const CONTENT_SCHEMA_VERSION = 1;
 const threadIdSchema = z.uuid();
 
@@ -40,12 +43,19 @@ const threadMessageRecordSchema = z.object({
   id: z.string(),
   ordinal: z.number().int().min(1),
   version: z.number().int().min(1),
-  message: modelMessageSchema,
+  // Runtime-validated with `safeValidateUIMessages` in `validateThreadRecord`.
+  message: z.custom<UIMessage>(),
   usage: threadUsageSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
   deletedAt: z.string().nullable(),
   error: z.string().nullable(),
+});
+
+const threadModelSelectionSchema: z.ZodType<ThreadModelSelection> = z.object({
+  providerId: z.string().min(1),
+  modelId: z.string().min(1),
+  reasoningBudget: z.string().min(1),
 });
 
 const contextSizeSchema = z.object({
@@ -57,6 +67,9 @@ const threadRecordSchema: z.ZodType<ThreadRecord> = z.object({
   schemaVersion: z.literal(THREAD_SCHEMA_VERSION),
   contentSchemaVersion: z.literal(CONTENT_SCHEMA_VERSION),
   id: threadIdSchema,
+  userId: z.string().min(1),
+  title: z.string().min(1),
+  modelSelection: threadModelSelectionSchema,
   history: z.array(threadMessageRecordSchema),
   activeHistory: z.array(threadMessageRecordSchema),
   lastCompactionOrdinal: z.number().int().min(1).nullable(),
@@ -66,6 +79,44 @@ const threadRecordSchema: z.ZodType<ThreadRecord> = z.object({
   updatedAt: z.string(),
   deletedAt: z.string().nullable(),
 });
+
+async function validateThreadRecord(
+  payload: unknown,
+): Promise<{ data: ThreadRecord } | { error: string }> {
+  const parsed = threadRecordSchema.safeParse(payload);
+
+  if (!parsed.success) {
+    return {
+      error: parsed.error.message,
+    };
+  }
+
+  if (parsed.data.history.length > 0) {
+    const historyValidation = await safeValidateUIMessages({
+      messages: parsed.data.history.map((record) => record.message),
+    });
+
+    if (!historyValidation.success) {
+      return {
+        error: `Invalid history UIMessage payload: ${historyValidation.error.message}`,
+      };
+    }
+  }
+
+  if (parsed.data.activeHistory.length > 0) {
+    const activeHistoryValidation = await safeValidateUIMessages({
+      messages: parsed.data.activeHistory.map((record) => record.message),
+    });
+
+    if (!activeHistoryValidation.success) {
+      return {
+        error: `Invalid activeHistory UIMessage payload: ${activeHistoryValidation.error.message}`,
+      };
+    }
+  }
+
+  return { data: parsed.data };
+}
 
 export interface FsMemoryOptions {
   /** Virtual (or real) filesystem adapter used for all I/O. */
@@ -171,13 +222,12 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
     try {
       const raw = await fs.readFile(filePath);
       const parsed = JSON.parse(raw) as unknown;
-      const result = threadRecordSchema.safeParse(parsed);
+      const result = await validateThreadRecord(parsed);
 
-      if (!result.success) {
+      if ("error" in result) {
         throw new ThreadMemoryError(
           "VALIDATION_ERROR",
-          `Invalid persisted thread state: ${result.error.message}`,
-          result.error,
+          `Invalid persisted thread state: ${result.error}`,
         );
       }
 
@@ -235,12 +285,11 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
    * could leave the canonical file in a corrupted state.
    */
   async function writeThread(thread: ThreadRecord): Promise<void> {
-    const validated = threadRecordSchema.safeParse(thread);
-    if (!validated.success) {
+    const validated = await validateThreadRecord(thread);
+    if ("error" in validated) {
       throw new ThreadMemoryError(
         "VALIDATION_ERROR",
-        `Refusing to write invalid state: ${validated.error.message}`,
-        validated.error,
+        `Refusing to write invalid state: ${validated.error}`,
       );
     }
 
@@ -266,16 +315,19 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
    * Throws `INVALID_STATE` if a thread with the same id already exists.
    */
   async function createThread(
-    params?: CreateThreadParams,
+    params: CreateThreadParams,
   ): Promise<ThreadRecord> {
-    const now = params?.createdAt ?? new Date().toISOString();
-    const threadId = params?.id ?? randomUUID();
+    const now = params.createdAt ?? new Date().toISOString();
+    const threadId = params.id ?? randomUUID();
     ensureThreadId(threadId);
 
     const thread: ThreadRecord = {
       schemaVersion: THREAD_SCHEMA_VERSION,
       contentSchemaVersion: CONTENT_SCHEMA_VERSION,
       id: threadId,
+      userId: params.userId,
+      title: params.title?.trim() || "New chat",
+      modelSelection: params.modelSelection,
       history: [],
       activeHistory: [],
       lastCompactionOrdinal: null,
@@ -318,6 +370,7 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
    */
   async function listThreads(params?: {
     includeDeleted?: boolean;
+    userId?: string;
   }): Promise<ThreadRecord[]> {
     await waitForPendingWrites();
 
@@ -337,6 +390,7 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
     }
 
     const includeDeleted = params?.includeDeleted ?? false;
+    const userId = params?.userId;
     const threadFiles = entries
       .filter((entry) => !entry.isDirectory && isThreadFile(entry.name))
       .map((entry) => `${rootDir}/${entry.name}`);
@@ -347,6 +401,7 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
 
     return threads
       .filter((thread) => includeDeleted || thread.deletedAt === null)
+      .filter((thread) => (userId ? thread.userId === userId : true))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
@@ -385,7 +440,7 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
           inputTokens: payload.usage.inputTokens,
           outputTokens: payload.usage.outputTokens,
           explicitCostUsd: payload.usage.totalCostUsd,
-          modelId: payload.modelId,
+          modelId: payload.modelSelection.modelId,
           pricingCalculator,
         }),
       };
@@ -413,6 +468,57 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
       await writeThread(withUsageAndContext);
 
       return withUsageAndContext;
+    });
+  }
+
+  /**
+   * Replaces the full thread history with a caller-provided UI transcript.
+   * Existing per-message usage is preserved for matching ids when possible.
+   */
+  async function replaceMessages(
+    threadId: string,
+    params: ReplaceThreadMessagesParams,
+  ): Promise<ThreadRecord | null> {
+    return withLock(async () => {
+      const thread = await readThread(threadId);
+
+      if (!thread) {
+        return null;
+      }
+
+      const now = params.now ?? new Date().toISOString();
+      const existingById = new Map(
+        thread.history.map((record) => [record.message.id, record]),
+      );
+
+      const rebuiltHistory: ThreadMessageRecord[] = params.messages.map(
+        (message, index) => {
+          const existing = existingById.get(message.id);
+
+          return {
+            id: existing?.id ?? randomUUID(),
+            ordinal: index + 1,
+            version: existing?.version ?? 1,
+            message,
+            usage: existing?.usage ?? emptyUsage(),
+            createdAt: existing?.createdAt ?? now,
+            updatedAt: now,
+            deletedAt: null,
+            error: existing?.error ?? null,
+          };
+        },
+      );
+
+      const updatedThread: ThreadRecord = recalculateUsageAndContext({
+        ...thread,
+        history: rebuiltHistory,
+        activeHistory: rebuiltHistory,
+        lastCompactionOrdinal: null,
+        updatedAt: now,
+      });
+
+      await writeThread(updatedThread);
+      return updatedThread;
     });
   }
 
@@ -519,6 +625,41 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
   }
 
   /**
+   * Updates mutable thread metadata (title/model selection) without changing
+   * message history.
+   */
+  async function updateThreadSettings(
+    threadId: string,
+    params: UpdateThreadSettingsParams,
+  ): Promise<ThreadRecord | null> {
+    return withLock(async () => {
+      const thread = await readThread(threadId);
+
+      if (!thread) {
+        return null;
+      }
+
+      const nextTitle =
+        params.title !== undefined
+          ? params.title.trim() || "New chat"
+          : thread.title;
+      const nextModelSelection = params.modelSelection
+        ? params.modelSelection
+        : thread.modelSelection;
+
+      const updatedThread: ThreadRecord = {
+        ...thread,
+        title: nextTitle,
+        modelSelection: nextModelSelection,
+        updatedAt: params.now ?? new Date().toISOString(),
+      };
+
+      await writeThread(updatedThread);
+      return updatedThread;
+    });
+  }
+
+  /**
    * Recalculates and persists the cumulative `usage` totals from the full
    * `history`. Useful when usage data becomes out-of-sync (e.g. after a
    * manual data repair).
@@ -574,9 +715,11 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
     getThread,
     listThreads,
     saveMessage,
+    replaceMessages,
     softDeleteThread,
     rebuildActiveHistory,
     compactIfNeeded,
+    updateThreadSettings,
     updateThreadUsage,
     updateContextSize,
   };

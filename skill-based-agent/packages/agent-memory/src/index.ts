@@ -18,10 +18,13 @@ export type {
   ThreadUsage,
   ContextSize,
   FsMemory,
+  ThreadModelSelection,
   ThreadPricingCalculator,
   CompactionPolicy,
   CompactThreadOptions,
   CompactThreadResult,
   CreateThreadParams,
+  ReplaceThreadMessagesParams,
   SaveThreadMessageParams,
+  UpdateThreadSettingsParams,
 } from "./types";

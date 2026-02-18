@@ -8,13 +8,32 @@ import { useShallow } from "zustand/react/shallow";
 import {
   getModelReasoningById,
   resolveModelSelection,
+  type ModelSelectionLike,
   type AIModelProviderEntry,
   type ReasoningBudget,
 } from "@/components/chat/model-catalog";
 import { useThreadApi } from "@/components/chat/use-thread-api";
 import { useThreadUiStore } from "@/components/chat/thread-ui-store";
 import type { ThreadStatus } from "@/components/chat/thread-ui-shared";
-import type { ThreadModelSelection } from "@/lib/server/chat-repository";
+import type { ThreadModelSelection } from "@/lib/server/models/model-selection";
+
+function toModelSelectionLike(
+  selection: ThreadModelSelection,
+): ModelSelectionLike {
+  const budget =
+    selection.reasoningBudget === "none" ||
+    selection.reasoningBudget === "low" ||
+    selection.reasoningBudget === "medium" ||
+    selection.reasoningBudget === "high"
+      ? selection.reasoningBudget
+      : "medium";
+
+  return {
+    providerId: selection.providerId,
+    modelId: selection.modelId,
+    reasoningBudget: budget,
+  };
+}
 
 function isPendingMessage(message: UIMessage): boolean {
   const metadata = (
@@ -98,8 +117,10 @@ export function useThreadChat({
     () =>
       resolveModelSelection(
         providers,
-        defaultModelSelection,
-        initialModelSelection,
+        toModelSelectionLike(defaultModelSelection),
+        initialModelSelection
+          ? toModelSelectionLike(initialModelSelection)
+          : undefined,
       ),
     [defaultModelSelection, initialModelSelection, providers],
   );
@@ -142,7 +163,7 @@ export function useThreadChat({
   }, [router]);
 
   const persistThreadModelSelection = useCallback(
-    async (selection: ThreadModelSelection) => {
+    async (selection: ModelSelectionLike) => {
       const threadId = threadIdRef.current;
       if (!threadId) {
         return;
@@ -160,7 +181,7 @@ export function useThreadChat({
     (args?: {
       modelSelection?: { modelId: string; providerId: string };
       reasoningBudget?: ReasoningBudget;
-    }): ThreadModelSelection | undefined => {
+    }): ModelSelectionLike | undefined => {
       const hasModelOverride = Boolean(args?.modelSelection);
       const hasBudgetOverride = Boolean(args?.reasoningBudget);
 
@@ -189,7 +210,7 @@ export function useThreadChat({
     async (args?: {
       modelSelection?: { modelId: string; providerId: string };
       reasoningBudget?: ReasoningBudget;
-    }): Promise<ThreadModelSelection | undefined> => {
+    }): Promise<ModelSelectionLike | undefined> => {
       const resolvedSelection = resolveInvocationModelSelection(args);
 
       if (!resolvedSelection) {
