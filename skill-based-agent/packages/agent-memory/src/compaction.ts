@@ -47,7 +47,7 @@ export function createHistoryCompactor(): HistoryCompactor {
    */
   function shouldCompact(
     thread: ThreadRecord,
-    policy: { maxContextTokens: number; reservedOutputTokens?: number },
+    policy: CompactThreadOptions["policy"],
   ): boolean {
     const context = aggregateContextSize(thread.activeHistory);
     const used = context.totalInputTokens + context.totalOutputTokens;

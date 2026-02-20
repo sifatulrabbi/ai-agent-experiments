@@ -34,11 +34,7 @@ export function emptyContextSize(): ContextSize {
 export function aggregateThreadUsage(
   history: ThreadMessageRecord[],
 ): ThreadUsage {
-  const activeMessages = history.filter(
-    (message) => message.deletedAt === null,
-  );
-
-  return activeMessages.reduce<ThreadUsage>(
+  return history.reduce<ThreadUsage>(
     (acc, message) => ({
       inputTokens: acc.inputTokens + message.usage.inputTokens,
       outputTokens: acc.outputTokens + message.usage.outputTokens,

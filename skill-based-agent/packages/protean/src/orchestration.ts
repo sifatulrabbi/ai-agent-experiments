@@ -7,8 +7,7 @@ import {
 } from "ai";
 import z from "zod";
 import { type Skill } from "@protean/skill";
-
-import { type Logger } from "./logger";
+import { type Logger } from "@protean/logger";
 import assert from "node:assert";
 
 export interface OrchestratorConfig {

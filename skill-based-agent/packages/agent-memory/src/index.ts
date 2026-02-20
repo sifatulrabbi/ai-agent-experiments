@@ -13,11 +13,12 @@ export { createFsMemory } from "./fs-memory";
 export type { FsMemoryOptions } from "./fs-memory";
 
 export type {
+  AgentMemory,
   ThreadMessageRecord,
   ThreadRecord,
+  ThreadRecordTrimmed,
   ThreadUsage,
   ContextSize,
-  FsMemory,
   ThreadModelSelection,
   ThreadPricingCalculator,
   CompactionPolicy,

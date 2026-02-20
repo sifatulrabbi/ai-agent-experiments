@@ -19,8 +19,8 @@ const literata = Literata({
 });
 
 export const metadata: Metadata = {
-  title: "Chat App",
-  description: "Chat with almost all the widely knows LLMs",
+  title: "Protean",
+  description: "Chat with almost all the widely known LLMs",
 };
 
 export default function RootLayout({

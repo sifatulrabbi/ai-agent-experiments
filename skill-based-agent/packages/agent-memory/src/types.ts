@@ -67,6 +67,11 @@ export interface ThreadRecord {
   deletedAt: string | null;
 }
 
+export type ThreadRecordTrimmed = Omit<
+  ThreadRecord,
+  "history" | "activeHistory"
+>;
+
 /** Persisted model/provider selection per thread. */
 export interface ThreadModelSelection {
   providerId: string;
@@ -165,14 +170,24 @@ export interface CompactThreadResult {
  * All mutating methods serialise through an internal write queue to
  * prevent concurrent writes from corrupting thread files.
  */
-export interface FsMemory {
+export interface AgentMemory {
   createThread(params: CreateThreadParams): Promise<ThreadRecord>;
-  getThread(threadId: string): Promise<ThreadRecord | null>;
+  getThread(threadId: string): Promise<ThreadRecordTrimmed | null>;
+  getThreadWithMessages(threadId: string): Promise<ThreadRecord | null>;
   listThreads(params?: {
     includeDeleted?: boolean;
     userId?: string;
   }): Promise<ThreadRecord[]>;
-  saveMessage(
+  // saveMessage(
+  //   threadId: string,
+  //   payload: SaveThreadMessageParams,
+  // ): Promise<ThreadRecord | null>;
+  /**
+   * Inserts a new message or updates an existing one matched by `message.id`.
+   * On update: refreshes message content, usage, and bumps the version.
+   * On insert: behaves identically to `saveMessage`.
+   */
+  upsertMessage(
     threadId: string,
     payload: SaveThreadMessageParams,
   ): Promise<ThreadRecord | null>;
@@ -184,11 +199,6 @@ export interface FsMemory {
     threadId: string,
     options?: { deletedAt?: string },
   ): Promise<boolean>;
-  /** Recomputes `activeHistory` from the full `history`, discarding any soft-deleted messages. */
-  rebuildActiveHistory(
-    threadId: string,
-    options?: { now?: string },
-  ): Promise<ThreadRecord | null>;
   compactIfNeeded(
     threadId: string,
     options: CompactThreadOptions,

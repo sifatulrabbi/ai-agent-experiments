@@ -1,6 +1,7 @@
 "use client";
 
 import type { UIMessage } from "ai";
+import type { ThreadUsage } from "@protean/agent-memory";
 import { ThreadErrorAlert } from "@/components/chat/thread-error-alert";
 import { ThreadHeader } from "@/components/chat/thread-header";
 import type { AIModelProviderEntry } from "@/components/chat/model-catalog";
@@ -11,6 +12,7 @@ import type { ThreadModelSelection } from "@/lib/server/models/model-selection";
 
 interface ThreadRouteContentProps {
   defaultModelSelection: ThreadModelSelection;
+  initialMessageUsageMap?: Record<string, ThreadUsage>;
   initialMessages?: UIMessage[];
   initialThreadId?: string;
   initialModelSelection?: ThreadModelSelection;
@@ -19,6 +21,7 @@ interface ThreadRouteContentProps {
 
 export function ThreadRouteContent({
   defaultModelSelection,
+  initialMessageUsageMap = {},
   initialMessages = [],
   initialThreadId,
   initialModelSelection,
@@ -57,6 +60,7 @@ export function ThreadRouteContent({
           providerId: selectedProviderId,
         }}
         currentThinkingBudget={thinkingBudget}
+        messageUsageMap={initialMessageUsageMap}
         onEditUserMessage={handleEditUserMessage}
         onRerunAssistantMessage={handleRerunAssistantMessage}
         messages={messages}

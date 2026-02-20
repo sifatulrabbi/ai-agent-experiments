@@ -1,6 +1,7 @@
 "use client";
 
 import type { UIMessage } from "ai";
+import type { ThreadUsage } from "@protean/agent-memory";
 import {
   AlertCircleIcon,
   CheckCircle2Icon,
@@ -35,6 +36,7 @@ import {
   messageKeyFor,
   type ThreadStatus,
 } from "@/components/chat/thread-ui-shared";
+import { formatCostUsd, formatTokenCount } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -63,6 +65,7 @@ import { Textarea } from "@/components/ui/textarea";
 interface ThreadMessagesProps {
   currentModelSelection: { modelId: string; providerId: string };
   currentThinkingBudget: string;
+  messageUsageMap: Record<string, ThreadUsage>;
   messages: UIMessage[];
   onEditUserMessage: (payload: {
     messageId: string;
@@ -89,6 +92,7 @@ function getMessageText(message: UIMessage): string {
 export function ThreadMessages({
   currentModelSelection,
   currentThinkingBudget,
+  messageUsageMap,
   messages,
   status,
   onEditUserMessage,
@@ -445,9 +449,7 @@ export function ThreadMessages({
                   (message.role === "assistant" || message.role === "user") ? (
                     <MessageToolbar
                       className={
-                        message.role === "user"
-                          ? "mt-0 justify-end"
-                          : "mt-0 justify-start"
+                        message.role === "user" ? "mt-0 justify-end" : "mt-0"
                       }
                     >
                       <MessageActions>
@@ -490,6 +492,27 @@ export function ThreadMessages({
                           </MessageAction>
                         ) : null}
                       </MessageActions>
+
+                      {(() => {
+                        const usage = messageUsageMap[message.id];
+                        if (!usage || message.role !== "assistant") {
+                          return null;
+                        }
+                        const cost = formatCostUsd(usage.totalCostUsd);
+                        return (
+                          <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+                            <span>{formatTokenCount(usage.inputTokens)} in</span>
+                            <span>·</span>
+                            <span>{formatTokenCount(usage.outputTokens)} out</span>
+                            {cost ? (
+                              <>
+                                <span>·</span>
+                                <span>{cost}</span>
+                              </>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
                     </MessageToolbar>
                   ) : null}
                 </Message>

@@ -1,5 +1,6 @@
-import { type UIMessage } from "ai";
+import { convertToModelMessages, type UIMessage } from "ai";
 import { createRootAgent } from "@protean/protean";
+import type { ThreadMessageRecord } from "@protean/agent-memory";
 import { requireUserId } from "@/lib/server/auth-user";
 import { getAgentMemory } from "@/lib/server/agent-memory";
 import { findModel } from "@/lib/server/models/model-catalog";
@@ -10,6 +11,8 @@ import {
   resolveModelSelection,
 } from "@/lib/server/models/model-selection";
 import { canAccessThread, threadToUiMessages } from "@/lib/server/thread-utils";
+import { consoleLogger } from "@protean/logger";
+import { createLocalFs } from "@protean/vfs";
 
 export const maxDuration = 30;
 
@@ -47,6 +50,36 @@ function clearPendingFlag(message: UIMessage): UIMessage {
   } as UIMessage;
 }
 
+function summarizeHistory(history: ThreadMessageRecord[]): UIMessage {
+  const summaryText = history
+    .map((item) => {
+      const parts = item.message.parts as Array<{
+        type: string;
+        text?: string;
+      }>;
+
+      return parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text ?? "")
+        .join(" ")
+        .trim();
+    })
+    .filter((text) => text.length > 0)
+    .join("\n")
+    .slice(-4000);
+
+  return {
+    id: `summary-${Date.now()}`,
+    role: "user",
+    parts: [
+      {
+        type: "text",
+        text: summaryText || "Conversation summary.",
+      },
+    ],
+  };
+}
+
 export async function POST(request: Request) {
   const [userId, body] = await Promise.all([
     requireUserId(),
@@ -73,10 +106,15 @@ export async function POST(request: Request) {
   const threadId = parsedBody.threadId;
   const memory = await getAgentMemory();
 
-  const thread = await memory.getThread(threadId);
+  const thread = await memory.getThreadWithMessages(threadId);
   if (!thread || !canAccessThread(thread, userId)) {
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }
+
+  const fs = await createLocalFs(
+    `/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project/${userId}`,
+    consoleLogger,
+  );
 
   // For making sure the model selection and the reasoning budget are valid.
   const threadSelection = normalizeThreadModelSelection({
@@ -84,9 +122,7 @@ export async function POST(request: Request) {
     modelId: thread.modelSelection.modelId,
     reasoningBudget: thread.modelSelection.reasoningBudget,
   });
-
   const requestSelection = parseLooseModelSelection(parsedBody.modelSelection);
-
   const resolvedModelSelection = resolveModelSelection({
     requestSelection,
     threadSelection,
@@ -98,12 +134,13 @@ export async function POST(request: Request) {
     });
   }
 
-  const resolvedModel = findModel(
+  /** The full model entry from openrouter */
+  const resolvedFullModelEntry = findModel(
     resolvedModelSelection.providerId,
     resolvedModelSelection.modelId,
   );
 
-  if (!resolvedModel) {
+  if (!resolvedFullModelEntry) {
     return Response.json(
       { error: "No valid model configuration available." },
       { status: 500 },
@@ -139,10 +176,8 @@ export async function POST(request: Request) {
     uiMessages = parsedBody.messages;
   }
 
-  await memory.replaceMessages(threadId, { messages: uiMessages });
-
   if (
-    resolvedModel.runtimeProvider === "openrouter" &&
+    resolvedFullModelEntry.runtimeProvider === "openrouter" &&
     !process.env.OPENROUTER_API_KEY
   ) {
     return Response.json(
@@ -151,71 +186,117 @@ export async function POST(request: Request) {
     );
   }
 
-  const agent = await createRootAgent({
-    modelId: resolvedModel.id,
-    reasoningBudget: resolvedModelSelection.reasoningBudget,
-    runtimeProvider: resolvedModel.runtimeProvider,
-  });
-
-  const streamSession = await agent.streamThread({
-    threadId,
-    uiMessages,
-    options: {
+  const agent = await createRootAgent(
+    {
+      fs,
       modelSelection: {
-        providerId: resolvedModelSelection.providerId,
+        providerId: resolvedFullModelEntry.runtimeProvider,
         modelId: resolvedModelSelection.modelId,
         reasoningBudget: resolvedModelSelection.reasoningBudget,
       },
-      memory: {
-        memory,
-        compactionPolicy: {
-          maxContextTokens: Math.max(resolvedModel.contextLimits.total, 1),
-          reservedOutputTokens: Math.min(
-            resolvedModel.contextLimits.maxOutput,
-            4096,
-          ),
-        },
-        summarizeHistory: async (history) => {
-          // TODO: use a LLM based approach to compact the history, put the logic in the packages/protean.
-
-          const summaryText = history
-            .map((item) => {
-              const parts = item.message.parts as Array<{
-                type: string;
-                text?: string;
-              }>;
-
-              return parts
-                .filter((part) => part.type === "text")
-                .map((part) => part.text ?? "")
-                .join(" ")
-                .trim();
-            })
-            .filter((text) => text.length > 0)
-            .join("\n")
-            .slice(-4000);
-
-          return {
-            id: `summary-${Date.now()}`,
-            role: "user",
-            parts: [
-              {
-                type: "text",
-                text: summaryText || "Conversation summary.",
-              },
-            ],
-          };
-        },
-      },
     },
+    consoleLogger,
+  );
+
+  const existingByMessageId = new Map(
+    thread.history
+      .filter((record) => record.deletedAt === null)
+      .map((record) => [record.message.id, record]),
+  );
+
+  for (const message of uiMessages) {
+    const existingRecord = existingByMessageId.get(message.id);
+    await memory.upsertMessage(threadId, {
+      ...(existingRecord ? { id: existingRecord.id } : {}),
+      message,
+      modelSelection: resolvedModelSelection,
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        totalDurationMs: 0,
+      },
+    });
+  }
+
+  await memory.compactIfNeeded(threadId, {
+    policy: {
+      maxContextTokens: resolvedFullModelEntry.contextLimits.total,
+      reservedOutputTokens: resolvedFullModelEntry.contextLimits.maxOutput,
+    },
+    summarizeHistory: async (history) => summarizeHistory(history),
   });
 
-  return streamSession.stream.toUIMessageStreamResponse({
+  const hydratedThread = await memory.getThreadWithMessages(threadId);
+  if (!hydratedThread || !canAccessThread(hydratedThread, userId)) {
+    return Response.json({ error: "Thread not found" }, { status: 404 });
+  }
+
+  const streamStartMs = Date.now();
+  const stream = await agent.stream({
+    messages: await convertToModelMessages(
+      hydratedThread.activeHistory
+        .filter((record) => record.deletedAt === null)
+        .sort((a, b) => a.ordinal - b.ordinal)
+        .map((record) => record.message),
+    ),
+  });
+
+  return stream.toUIMessageStreamResponse({
     sendReasoning: true,
     sendSources: false,
     originalMessages: uiMessages as never[],
     onFinish: async ({ messages }) => {
-      await streamSession.persistFinish(messages);
+      const finishMessages = messages as UIMessage[];
+      const reloaded = await memory.getThreadWithMessages(threadId);
+      if (!reloaded || !canAccessThread(reloaded, userId)) {
+        return;
+      }
+
+      const existingIds = new Set(
+        reloaded.history
+          .filter((record) => record.deletedAt === null)
+          .map((record) => record.message.id),
+      );
+      const toPersist = finishMessages.filter(
+        (message) => !existingIds.has(message.id),
+      );
+
+      if (toPersist.length === 0) {
+        return;
+      }
+
+      const duration = Math.max(Date.now() - streamStartMs, 0);
+      let inputTokens = 0;
+      let outputTokens = 0;
+
+      try {
+        const usage = await stream.usage;
+        inputTokens = usage.inputTokens ?? 0;
+        outputTokens = usage.outputTokens ?? 0;
+      } catch {
+        inputTokens = 0;
+        outputTokens = 0;
+      }
+
+      const assistantCandidates = toPersist.filter(
+        (message) => message.role === "assistant",
+      );
+      const usageTargetId =
+        assistantCandidates[assistantCandidates.length - 1]?.id ??
+        toPersist[toPersist.length - 1]?.id;
+
+      for (const message of toPersist) {
+        const shouldAssignUsage = message.id === usageTargetId;
+        await memory.upsertMessage(threadId, {
+          message,
+          modelSelection: resolvedModelSelection,
+          usage: {
+            inputTokens: shouldAssignUsage ? inputTokens : 0,
+            outputTokens: shouldAssignUsage ? outputTokens : 0,
+            totalDurationMs: shouldAssignUsage ? duration : 0,
+          },
+        });
+      }
     },
     onError: (error) => {
       if (error instanceof Error) {

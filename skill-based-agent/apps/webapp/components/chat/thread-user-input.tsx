@@ -100,11 +100,13 @@ export function ThreadPromptInput({
       ),
     [modelSelection.modelId, modelSelection.providerId, providers],
   );
-  const availablestrings = useMemo(
+  const availableReasoningBudgets = useMemo(
     () => selectedModel?.reasoning.budgets ?? [],
     [selectedModel],
   );
-  const supportsThinking = availablestrings.some((budget) => budget !== "none");
+  const supportsThinking = availableReasoningBudgets.some(
+    (budget) => budget !== "none",
+  );
 
   useEffect(() => {
     if (!selectedModel) {
@@ -178,7 +180,7 @@ export function ThreadPromptInput({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {availablestrings.map((budget) => (
+                    {availableReasoningBudgets.map((budget) => (
                       <DropdownMenuItem
                         className="flex items-center justify-between gap-2"
                         key={budget}
@@ -211,7 +213,7 @@ export function ThreadPromptInput({
                     <SelectValue placeholder="Thinking" />
                   </SelectTrigger>
                   <SelectContent align="start">
-                    {availablestrings.map((budget) => (
+                    {availableReasoningBudgets.map((budget) => (
                       <SelectItem key={budget} value={budget}>
                         {budget === "none"
                           ? "None"

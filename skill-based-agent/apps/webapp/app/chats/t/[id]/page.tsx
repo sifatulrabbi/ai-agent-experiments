@@ -6,7 +6,11 @@ import {
   getModelCatalog,
 } from "@/lib/server/models/model-catalog";
 import { normalizeThreadModelSelection } from "@/lib/server/models/model-selection";
-import { canAccessThread, threadToUiMessages } from "@/lib/server/thread-utils";
+import {
+  canAccessThread,
+  threadToMessageUsageMap,
+  threadToUiMessages,
+} from "@/lib/server/thread-utils";
 import { notFound, redirect } from "next/navigation";
 
 export default async function ThreadPage({
@@ -22,7 +26,7 @@ export default async function ThreadPage({
   }
 
   const memory = await getAgentMemory();
-  const thread = await memory.getThread(id);
+  const thread = await memory.getThreadWithMessages(id);
   if (!thread || !canAccessThread(thread, session.user.email)) {
     notFound();
   }
@@ -42,6 +46,7 @@ export default async function ThreadPage({
   return (
     <ThreadRouteContent
       defaultModelSelection={defaultModelSelection}
+      initialMessageUsageMap={threadToMessageUsageMap(thread)}
       initialMessages={threadToUiMessages(thread)}
       initialModelSelection={initialModelSelection}
       initialThreadId={thread.id}
