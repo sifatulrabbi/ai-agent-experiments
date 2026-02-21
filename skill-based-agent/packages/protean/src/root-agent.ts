@@ -40,9 +40,13 @@ export interface RootAgentOpts {
   modelSelection: ModelSelection;
 }
 
+function createWorkspaceTools(opts: RootAgentOpts, logger: Logger) {
+  const workspaceSkill = new WorkspaceSkill({ fsClient: opts.fs, logger });
+  return workspaceSkill.tools;
+}
+
 async function createSkills(opts: RootAgentOpts, logger: Logger) {
   const skills: Skill<unknown>[] = [
-    new WorkspaceSkill({ fsClient: opts.fs, logger }),
     new DocxSkill({
       fsClient: opts.fs,
       converter: createDocxConverter(
@@ -78,9 +82,13 @@ async function createSkills(opts: RootAgentOpts, logger: Logger) {
 
 export async function createRootAgent(opts: RootAgentOpts, logger: Logger) {
   const model = createModelFromSelection(opts.modelSelection, logger);
-  const skills = await createSkills(opts, logger);
-  const subAgentTools = await createSubAgentTools(
-    { skillsList: skills, model, baseTools: webSearchTools },
+  const baseTools = {
+    ...webSearchTools,
+    ...createWorkspaceTools(opts, logger),
+  };
+  const skillsList = await createSkills(opts, logger);
+  const subAgentTools = createSubAgentTools(
+    { skillsList, model, baseTools },
     logger,
   );
   const agent = await createSkillOrchestrator(
@@ -88,8 +96,8 @@ export async function createRootAgent(opts: RootAgentOpts, logger: Logger) {
       agentId: "protean-agent",
       model: model,
       instructionsBuilder: buildRootAgentPrompt,
-      skillsList: skills,
-      baseTools: { ...webSearchTools, ...subAgentTools },
+      skillsList,
+      baseTools: { ...baseTools, ...subAgentTools },
     },
     logger,
   );

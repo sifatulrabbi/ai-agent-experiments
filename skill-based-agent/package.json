@@ -13,6 +13,7 @@
     "lint": "bun run --cwd packages/protean lint && bun run --cwd apps/tui lint && bun run --cwd apps/webapp lint",
     "test": "bun run --filter \"packages/*\" --if-present test && bun run --filter \"apps/tui\" --if-present test",
     "test:integration": "bun run --cwd packages/protean test:integration",
+    "dev:vfs": "cd apps/vfs-server && make dev",
     "format": "bunx prettier --write ./*"
   }
 }

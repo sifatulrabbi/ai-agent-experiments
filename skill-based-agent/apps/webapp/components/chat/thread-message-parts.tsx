@@ -1,6 +1,7 @@
 "use client";
 
 import type { UIMessage } from "ai";
+import { useMemo } from "react";
 import { MessageResponse } from "@/components/ai-elements/message";
 import {
   Reasoning,
@@ -9,6 +10,8 @@ import {
 } from "@/components/ai-elements/reasoning";
 import { ToolCallStatus } from "@/components/ai-elements/tool";
 import { isThreadToolPart } from "@/components/chat/thread-ui-shared";
+import { FileArtifact } from "@/components/chat/file-artifact";
+import { detectFilesFromToolResult } from "@/lib/file-utils";
 
 interface ThreadMessagePartsProps {
   isLastMessage: boolean;
@@ -61,16 +64,40 @@ export function ThreadMessageParts({
           const toolKey =
             part.toolCallId?.trim() || `${messageKey}-tool-${index}`;
 
-          return part.type === "dynamic-tool" ? (
-            <ToolCallStatus
-              key={toolKey}
-              state={part.state}
-              toolName={part.toolName}
-              type={part.type}
-            />
-          ) : (
-            <ToolCallStatus key={toolKey} state={part.state} type={part.type} />
-          );
+          const toolStatus =
+            part.type === "dynamic-tool" ? (
+              <ToolCallStatus
+                key={toolKey}
+                state={part.state}
+                toolName={part.toolName}
+                type={part.type}
+              />
+            ) : (
+              <ToolCallStatus
+                key={toolKey}
+                state={part.state}
+                type={part.type}
+              />
+            );
+
+          if (part.state === "output-available") {
+            const files = detectFilesFromToolResult(part.output);
+            if (files && files.length > 0) {
+              return (
+                <div key={toolKey}>
+                  {toolStatus}
+                  {files.map((file) => (
+                    <FileArtifact
+                      key={`${toolKey}-file-${file.path}`}
+                      file={file}
+                    />
+                  ))}
+                </div>
+              );
+            }
+          }
+
+          return toolStatus;
         }
 
         return null;

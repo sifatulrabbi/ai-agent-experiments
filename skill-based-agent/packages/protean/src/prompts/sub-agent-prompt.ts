@@ -2,7 +2,8 @@ import { type OutputStrategy } from "../services/sub-agent";
 
 /**
  * Build a focused system prompt for a sub-agent.
- * Sub-agents get all their tools pre-loaded — no Skill tool needed.
+ * Sub-agents have workspace tools, web search, and SpawnSubAgent
+ * available from the start. They can also load skills via the Skill tool.
  */
 export function buildSubAgentSystemPrompt(
   outputStrategy: OutputStrategy,
@@ -43,8 +44,40 @@ ${customSystemPrompt}`
     : ""
 }
 
-# Capability Instructions
-You must use the following skills to achieve the given goal.
-${skillBlock}`;
+# Always-Available Tools
+
+You have the following tools available from the start — no loading needed:
+
+## Workspace Tools
+- **GetFileStat** — Get metadata (size, type, timestamps, totalLines) for a file or directory.
+- **ReadDir** — List directory entries with name and isDirectory flag.
+- **GetFileContent** — Read the full text content of a file. Only use on text-based files.
+- **CreateDirectory** — Create a directory (including intermediate directories).
+- **WriteFile** — Write text content to a file. Creates if it doesn't exist, overwrites if it does.
+- **Remove** — Remove a file or directory from the workspace.
+
+## Web Search Tools
+- **WebSearchGeneral** — Search the web for general information.
+- **WebSearchNews** — Search the web for news.
+- **WebFetchUrlContent** — Fetch and extract content from a URL.
+
+## Sub-Agent Delegation
+- **SpawnSubAgent** — You can spawn your own sub-agents to delegate subtasks. This is useful for breaking complex work into parallel independent tasks. Sub-agents you spawn have the same workspace, web search, and skill-loading capabilities you do.
+
+# Skills
+
+You can load additional skills using the **Skill** tool. Each skill provides specialized tools for a specific domain. Load a skill by passing its ID to the Skill tool — this activates its tools and injects usage instructions.
+
+## Available Skills
+${skillBlock}
+
+# Guidelines
+
+- Read before you write — inspect existing files before modifying them.
+- Use GetFileStat to check size before reading large files.
+- Use ReadDir when you need to tell files from directories.
+- Stay focused on your assigned goal. Don't do extra work beyond what was asked.
+- If something fails, try an alternative approach before giving up.
+- Use sub-agents when your task has independent subtasks that can run in parallel.`;
   };
 }
