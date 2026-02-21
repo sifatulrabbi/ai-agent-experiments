@@ -1,4 +1,8 @@
-import type { ThreadRecord } from "@protean/agent-memory";
+import type {
+  ThreadRecord,
+  ThreadRecordTrimmed,
+  ThreadUsage,
+} from "@protean/agent-memory";
 import type { UIMessage } from "ai";
 
 export function threadToUiMessages(thread: ThreadRecord): UIMessage[] {
@@ -8,6 +12,21 @@ export function threadToUiMessages(thread: ThreadRecord): UIMessage[] {
     .map((message) => message.message);
 }
 
-export function canAccessThread(thread: ThreadRecord, userId: string): boolean {
+export function threadToMessageUsageMap(
+  thread: ThreadRecord,
+): Record<string, ThreadUsage> {
+  const map: Record<string, ThreadUsage> = {};
+  for (const record of thread.history) {
+    if (record.deletedAt === null) {
+      map[record.message.id] = record.usage;
+    }
+  }
+  return map;
+}
+
+export function canAccessThread(
+  thread: ThreadRecordTrimmed,
+  userId: string,
+): boolean {
   return thread.userId === userId && thread.deletedAt === null;
 }

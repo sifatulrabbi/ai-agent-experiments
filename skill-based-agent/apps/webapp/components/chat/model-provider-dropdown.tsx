@@ -14,15 +14,16 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { AIModelProviderEntry } from "@/components/chat/model-catalog";
+import type { ModelSelection } from "@protean/model-catalog";
+import { getModelReasoningById } from "@protean/model-catalog";
+import { useModelCatalog } from "@/components/chat/model-catalog-provider";
 
 interface ModelProviderDropdownProps {
   disabled?: boolean;
   maxLabelLength?: number;
-  onChange: (selection: { modelId: string; providerId: string }) => void;
-  providers: AIModelProviderEntry[];
+  onChange: (selection: ModelSelection) => void;
   triggerMode?: "default" | "icon" | "pill";
-  value: { modelId: string; providerId: string };
+  value: ModelSelection;
 }
 
 function parseModelLabel(modelLabel: string) {
@@ -36,10 +37,10 @@ export function ModelProviderDropdown({
   disabled,
   maxLabelLength,
   onChange,
-  providers,
   triggerMode = "default",
   value,
 }: ModelProviderDropdownProps) {
+  const providers = useModelCatalog();
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const selectedProvider = providers.find(
     (provider) => provider.id === value.providerId,
@@ -146,9 +147,19 @@ export function ModelProviderDropdown({
                     <DropdownMenuItem
                       className="items-start gap-2 py-2.5"
                       key={`${provider.id}-${model.id}`}
-                      onSelect={() =>
-                        onChange({ modelId: model.id, providerId: provider.id })
-                      }
+                      onSelect={() => {
+                        const reasoning = getModelReasoningById(
+                          providers,
+                          provider.id,
+                          model.id,
+                        );
+                        onChange({
+                          modelId: model.id,
+                          providerId: provider.id,
+                          reasoningBudget: (reasoning?.defaultValue ??
+                            "none") as ModelSelection["reasoningBudget"],
+                        });
+                      }}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="truncate">{model.name}</div>
@@ -189,12 +200,19 @@ export function ModelProviderDropdown({
                       <DropdownMenuItem
                         className="items-start gap-2 py-2.5"
                         key={`${provider.id}-${model.id}`}
-                        onSelect={() =>
+                        onSelect={() => {
+                          const reasoning = getModelReasoningById(
+                            providers,
+                            provider.id,
+                            model.id,
+                          );
                           onChange({
                             modelId: model.id,
                             providerId: provider.id,
-                          })
-                        }
+                            reasoningBudget: (reasoning?.defaultValue ??
+                              "none") as ModelSelection["reasoningBudget"],
+                          });
+                        }}
                       >
                         <div className="min-w-0 flex-1">
                           <div className="truncate">{model.name}</div>

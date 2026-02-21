@@ -7,9 +7,10 @@ import {
   BrainIcon,
   MoreHorizontalIcon,
 } from "lucide-react";
-import type { AIModelProviderEntry } from "@/components/chat/model-catalog";
-import { getModelById } from "@/components/chat/model-catalog";
+import { getModelById } from "@protean/model-catalog";
+import { useModelCatalog } from "@/components/chat/model-catalog-provider";
 import { ModelProviderDropdown } from "@/components/chat/model-provider-dropdown";
+import { useThreadChatContext } from "@/components/chat/thread-chat-provider";
 import {
   PromptInput,
   PromptInputBody,
@@ -38,19 +39,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useThreadUiStore } from "@/components/chat/thread-ui-store";
-import type { ThreadStatus } from "@/components/chat/thread-ui-shared";
-
-interface ThreadPromptInputProps {
-  disabled?: boolean;
-  modelSelection: { modelId: string; providerId: string };
-  onModelChange: (selection: { modelId: string; providerId: string }) => void;
-  onStop: () => void;
-  onSubmit: (payload: { text: string }) => Promise<void> | void;
-  onThinkingBudgetChange: (budget: string) => void;
-  providers: AIModelProviderEntry[];
-  status: ThreadStatus;
-  thinkingBudget: string;
-}
 
 function PromptActionRow({
   children,
@@ -67,17 +55,18 @@ function PromptActionRow({
   );
 }
 
-export function ThreadPromptInput({
-  disabled,
-  modelSelection,
-  onModelChange,
-  onStop,
-  onSubmit,
-  onThinkingBudgetChange,
-  providers,
-  status,
-  thinkingBudget,
-}: ThreadPromptInputProps) {
+export function ThreadPromptInput() {
+  const {
+    handleModelChange: onModelChange,
+    handleReasoningBudgetChange: onReasoningBudgetChange,
+    handleSubmit: onSubmit,
+    isCreatingThread,
+    modelSelection,
+    status,
+    stop: onStop,
+  } = useThreadChatContext();
+  const providers = useModelCatalog();
+  const disabled = isCreatingThread;
   const isDeepResearchEnabled = useThreadUiStore(
     (state) => state.deepResearchEnabled,
   );
@@ -100,21 +89,25 @@ export function ThreadPromptInput({
       ),
     [modelSelection.modelId, modelSelection.providerId, providers],
   );
-  const availablestrings = useMemo(
+  const availableReasoningBudgets = useMemo(
     () => selectedModel?.reasoning.budgets ?? [],
     [selectedModel],
   );
-  const supportsThinking = availablestrings.some((budget) => budget !== "none");
+  const supportsThinking = availableReasoningBudgets.some(
+    (budget) => budget !== "none",
+  );
 
   useEffect(() => {
     if (!selectedModel) {
       return;
     }
 
-    if (!selectedModel.reasoning.budgets.includes(thinkingBudget)) {
-      onThinkingBudgetChange(selectedModel.reasoning.defaultValue);
+    if (
+      !selectedModel.reasoning.budgets.includes(modelSelection.reasoningBudget)
+    ) {
+      onReasoningBudgetChange(selectedModel.reasoning.defaultValue);
     }
-  }, [onThinkingBudgetChange, selectedModel, thinkingBudget]);
+  }, [onReasoningBudgetChange, selectedModel, modelSelection.reasoningBudget]);
 
   return (
     <div className="sticky bottom-0 bg-background pt-2 pb-4">
@@ -159,7 +152,6 @@ export function ThreadPromptInput({
               disabled={disabled}
               maxLabelLength={28}
               onChange={onModelChange}
-              providers={providers}
               triggerMode="pill"
               value={modelSelection}
             />
@@ -178,18 +170,18 @@ export function ThreadPromptInput({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {availablestrings.map((budget) => (
+                    {availableReasoningBudgets.map((budget) => (
                       <DropdownMenuItem
                         className="flex items-center justify-between gap-2"
                         key={budget}
-                        onSelect={() => onThinkingBudgetChange(budget)}
+                        onSelect={() => onReasoningBudgetChange(budget)}
                       >
                         <span>
                           {budget === "none"
                             ? "None"
                             : `${budget[0]?.toUpperCase()}${budget.slice(1)}`}
                         </span>
-                        {budget === thinkingBudget ? (
+                        {budget === modelSelection.reasoningBudget ? (
                           <CheckIcon className="size-4 text-muted-foreground" />
                         ) : null}
                       </DropdownMenuItem>
@@ -199,9 +191,9 @@ export function ThreadPromptInput({
 
                 <Select
                   onValueChange={(value) =>
-                    onThinkingBudgetChange(value as string)
+                    onReasoningBudgetChange(value as string)
                   }
-                  value={thinkingBudget}
+                  value={modelSelection.reasoningBudget}
                 >
                   <SelectTrigger
                     className="hidden h-8 w-30 gap-2 rounded-md text-xs sm:flex"
@@ -211,7 +203,7 @@ export function ThreadPromptInput({
                     <SelectValue placeholder="Thinking" />
                   </SelectTrigger>
                   <SelectContent align="start">
-                    {availablestrings.map((budget) => (
+                    {availableReasoningBudgets.map((budget) => (
                       <SelectItem key={budget} value={budget}>
                         {budget === "none"
                           ? "None"

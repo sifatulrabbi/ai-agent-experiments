@@ -1,5 +1,5 @@
 import { stepCountIs, ToolLoopAgent } from "ai";
-import { type AIModelEntry } from "@/components/chat/model-catalog";
+import { type AIModelEntry } from "@protean/model-catalog";
 
 import type { AgentFactoryConfig } from "./types";
 import { ModelProviders } from "./model-providers";

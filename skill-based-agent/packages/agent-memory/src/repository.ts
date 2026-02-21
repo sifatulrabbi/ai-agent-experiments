@@ -1,7 +1,7 @@
-import type { FsMemory } from "./types";
+import type { AgentMemory } from "./types";
 
 /** Re-exported here for consumers who import from this module path. */
-export type { FsMemory };
+export type { AgentMemory as FsMemory };
 
 /**
  * Marker interface for versioned persisted state objects.

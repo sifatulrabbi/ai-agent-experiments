@@ -7,13 +7,7 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from "@/components/ai-elements/tool";
+import { ToolCallStatus } from "@/components/ai-elements/tool";
 import { isThreadToolPart } from "@/components/chat/thread-ui-shared";
 
 interface ThreadMessagePartsProps {
@@ -67,22 +61,15 @@ export function ThreadMessageParts({
           const toolKey =
             part.toolCallId?.trim() || `${messageKey}-tool-${index}`;
 
-          return (
-            <Tool key={toolKey} className="w-full">
-              {part.type === "dynamic-tool" ? (
-                <ToolHeader
-                  state={part.state}
-                  toolName={part.toolName}
-                  type={part.type}
-                />
-              ) : (
-                <ToolHeader state={part.state} type={part.type} />
-              )}
-              <ToolContent>
-                <ToolInput input={part.input} />
-                <ToolOutput errorText={part.errorText} output={part.output} />
-              </ToolContent>
-            </Tool>
+          return part.type === "dynamic-tool" ? (
+            <ToolCallStatus
+              key={toolKey}
+              state={part.state}
+              toolName={part.toolName}
+              type={part.type}
+            />
+          ) : (
+            <ToolCallStatus key={toolKey} state={part.state} type={part.type} />
           );
         }
 

@@ -1,13 +1,19 @@
+import { redirect } from "next/navigation";
+import type { ThreadRecord } from "@protean/agent-memory";
+
 import { auth } from "@/auth";
 import { ThreadRouteContent } from "@/components/chat/thread-route-content";
 import { getAgentMemory } from "@/lib/server/agent-memory";
 import {
   getDefaultModelSelection,
   getModelCatalog,
-} from "@/lib/server/models/model-catalog";
-import { normalizeThreadModelSelection } from "@/lib/server/models/model-selection";
-import { canAccessThread, threadToUiMessages } from "@/lib/server/thread-utils";
-import { notFound, redirect } from "next/navigation";
+  resolveModelSelection,
+} from "@protean/model-catalog";
+import {
+  canAccessThread,
+  threadToMessageUsageMap,
+  threadToUiMessages,
+} from "@/lib/server/thread-utils";
 
 export default async function ThreadPage({
   params,
@@ -22,26 +28,24 @@ export default async function ThreadPage({
   }
 
   const memory = await getAgentMemory();
-  const thread = await memory.getThread(id);
+  let thread: ThreadRecord | null = null;
+  try {
+    thread = await memory.getThreadWithMessages(id);
+  } catch {}
   if (!thread || !canAccessThread(thread, session.user.email)) {
-    notFound();
+    redirect("/chats/new");
   }
 
   const providers = getModelCatalog();
   const defaultModelSelection = getDefaultModelSelection();
-  const initialModelSelection = normalizeThreadModelSelection({
-    providerId: thread.modelSelection.providerId,
-    modelId: thread.modelSelection.modelId,
-    reasoningBudget: thread.modelSelection.reasoningBudget as
-      | "none"
-      | "low"
-      | "medium"
-      | "high",
+  const initialModelSelection = resolveModelSelection({
+    thread: thread.modelSelection,
   });
 
   return (
     <ThreadRouteContent
       defaultModelSelection={defaultModelSelection}
+      initialMessageUsageMap={threadToMessageUsageMap(thread)}
       initialMessages={threadToUiMessages(thread)}
       initialModelSelection={initialModelSelection}
       initialThreadId={thread.id}

@@ -8,7 +8,7 @@ export default async function ChatsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const [session, memory] = await Promise.all([auth(), getAgentMemory()]);
 
   if (!session?.user) {
     redirect("/login");
@@ -20,7 +20,6 @@ export default async function ChatsLayout({
     redirect("/login");
   }
 
-  const memory = await getAgentMemory();
   const threads = await memory.listThreads({ userId: userEmail });
 
   return (

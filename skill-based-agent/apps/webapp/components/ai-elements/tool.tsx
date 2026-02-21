@@ -20,7 +20,65 @@ import {
 } from "lucide-react";
 import { isValidElement } from "react";
 
+import { Shimmer } from "./shimmer";
+
 import { CodeBlock } from "./code-block";
+
+const activeStates = new Set<ToolPart["state"]>([
+  "input-streaming",
+  "input-available",
+  "approval-requested",
+  "approval-responded",
+]);
+
+export type ToolCallStatusProps = {
+  className?: string;
+} & (
+  | { type: ToolUIPart["type"]; state: ToolUIPart["state"]; toolName?: never }
+  | {
+      type: DynamicToolUIPart["type"];
+      state: DynamicToolUIPart["state"];
+      toolName: string;
+    }
+);
+
+export const ToolCallStatus = ({
+  className,
+  type,
+  state,
+  toolName,
+}: ToolCallStatusProps) => {
+  const rawName =
+    type === "dynamic-tool" ? toolName : type.split("-").slice(1).join("-");
+  const label = `Using ${rawName}`;
+
+  const isActive = activeStates.has(state);
+  const isSuccess = state === "output-available";
+  const isError = state === "output-error" || state === "output-denied";
+
+  return (
+    <div
+      className={cn(
+        "not-prose mb-2 flex items-center gap-2 text-sm text-muted-foreground",
+        className,
+      )}
+    >
+      <WrenchIcon
+        className={cn(
+          "size-3.5 shrink-0",
+          isActive && "text-yellow-600 dark:text-yellow-500",
+          isSuccess && "text-green-600 dark:text-green-500",
+          isError && "text-red-600 dark:text-red-400",
+        )}
+      />
+      {isActive ? (
+        <Shimmer duration={1.5}>{label}</Shimmer>
+      ) : (
+        <span>{label}</span>
+      )}
+    </div>
+  );
+};
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
 
@@ -58,8 +116,10 @@ const statusLabels: Record<ToolPart["state"], string> = {
 const statusIcons: Record<ToolPart["state"], ReactNode> = {
   "approval-requested": <ClockIcon className="size-4 text-yellow-600" />,
   "approval-responded": <CheckCircleIcon className="size-4 text-blue-600" />,
-  "input-available": <ClockIcon className="size-4 animate-pulse" />,
-  "input-streaming": <CircleIcon className="size-4" />,
+  "input-available": (
+    <ClockIcon className="size-4 animate-pulse text-yellow-600" />
+  ),
+  "input-streaming": <CircleIcon className="size-4 text-yellow-600" />,
   "output-available": <CheckCircleIcon className="size-4 text-green-600" />,
   "output-denied": <XCircleIcon className="size-4 text-orange-600" />,
   "output-error": <XCircleIcon className="size-4 text-red-600" />,

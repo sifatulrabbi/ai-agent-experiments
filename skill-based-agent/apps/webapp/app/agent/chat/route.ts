@@ -1,17 +1,18 @@
-import { type UIMessage } from "ai";
+import { convertToModelMessages, type UIMessage } from "ai";
 import { createRootAgent } from "@protean/protean";
+import type { ThreadMessageRecord } from "@protean/agent-memory";
+import { consoleLogger } from "@protean/logger";
+import { createLocalFs } from "@protean/vfs";
+import {
+  findModel,
+  isSameModelSelection,
+  parseModelSelection,
+  resolveModelSelection,
+} from "@protean/model-catalog";
+
 import { requireUserId } from "@/lib/server/auth-user";
 import { getAgentMemory } from "@/lib/server/agent-memory";
-import { findModel } from "@/lib/server/models/model-catalog";
-import {
-  isSameModelSelection,
-  normalizeThreadModelSelection,
-  parseLooseModelSelection,
-  resolveModelSelection,
-} from "@/lib/server/models/model-selection";
-import { canAccessThread, threadToUiMessages } from "@/lib/server/thread-utils";
-
-export const maxDuration = 30;
+import { canAccessThread } from "@/lib/server/thread-utils";
 
 function isPendingMessage(message: UIMessage): boolean {
   const metadata = (
@@ -47,6 +48,36 @@ function clearPendingFlag(message: UIMessage): UIMessage {
   } as UIMessage;
 }
 
+function summarizeHistory(history: ThreadMessageRecord[]): UIMessage {
+  const summaryText = history
+    .map((item) => {
+      const parts = item.message.parts as Array<{
+        type: string;
+        text?: string;
+      }>;
+
+      return parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text ?? "")
+        .join(" ")
+        .trim();
+    })
+    .filter((text) => text.length > 0)
+    .join("\n")
+    .slice(-4000);
+
+  return {
+    id: `summary-${Date.now()}`,
+    role: "user",
+    parts: [
+      {
+        type: "text",
+        text: summaryText || "Conversation summary.",
+      },
+    ],
+  };
+}
+
 export async function POST(request: Request) {
   const [userId, body] = await Promise.all([
     requireUserId(),
@@ -59,11 +90,7 @@ export async function POST(request: Request) {
 
   const parsedBody = body as {
     invokePending?: boolean;
-    modelId?: unknown;
-    messages?: UIMessage[];
     modelSelection?: unknown;
-    providerId?: unknown;
-    thinkingBudget?: unknown;
     threadId?: string;
   } | null;
 
@@ -73,52 +100,53 @@ export async function POST(request: Request) {
   const threadId = parsedBody.threadId;
   const memory = await getAgentMemory();
 
-  const thread = await memory.getThread(threadId);
+  let thread = await memory.getThreadWithMessages(threadId);
   if (!thread || !canAccessThread(thread, userId)) {
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }
 
+  // INFO: Keep it as is, do not change the path or remove this.
+  const fs = await createLocalFs(
+    `/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project/${userId}`,
+    consoleLogger,
+  );
+
   // For making sure the model selection and the reasoning budget are valid.
-  const threadSelection = normalizeThreadModelSelection({
-    providerId: thread.modelSelection.providerId,
-    modelId: thread.modelSelection.modelId,
-    reasoningBudget: thread.modelSelection.reasoningBudget,
-  });
-
-  const requestSelection = parseLooseModelSelection(parsedBody.modelSelection);
-
+  const requestSelection = parseModelSelection(parsedBody.modelSelection);
   const resolvedModelSelection = resolveModelSelection({
-    requestSelection,
-    threadSelection,
+    request: requestSelection,
+    thread: thread.modelSelection,
   });
 
-  if (!isSameModelSelection(threadSelection, resolvedModelSelection)) {
-    await memory.updateThreadSettings(threadId, {
+  if (!isSameModelSelection(thread.modelSelection, resolvedModelSelection)) {
+    thread = await memory.updateThreadSettings(threadId, {
       modelSelection: resolvedModelSelection,
     });
+    if (!thread || !canAccessThread(thread, userId)) {
+      return Response.json({ error: "Thread not found" }, { status: 404 });
+    }
   }
 
-  const resolvedModel = findModel(
+  /** The full model entry from openrouter */
+  const fullModelEntry = findModel(
     resolvedModelSelection.providerId,
     resolvedModelSelection.modelId,
   );
 
-  if (!resolvedModel) {
+  if (!fullModelEntry) {
     return Response.json(
       { error: "No valid model configuration available." },
       { status: 500 },
     );
   }
 
-  let uiMessages: UIMessage[];
-  const threadMessages = threadToUiMessages(thread);
-
   if (parsedBody.invokePending) {
-    const pendingIndex = [...threadMessages]
-      .map((message, index) => ({ index, message }))
+    const pendingIndex = [...thread.history]
+      .map((tmsg, index) => ({ index, tmsg }))
       .reverse()
       .find(
-        ({ message }) => message.role === "user" && isPendingMessage(message),
+        ({ tmsg }) =>
+          tmsg.message.role === "user" && isPendingMessage(tmsg.message),
       )?.index;
 
     if (pendingIndex === undefined) {
@@ -128,100 +156,109 @@ export async function POST(request: Request) {
       );
     }
 
-    uiMessages = threadMessages.map((message, index) =>
-      index === pendingIndex ? clearPendingFlag(message) : message,
+    const pendingTmsg = thread.history[pendingIndex];
+    pendingTmsg.message = clearPendingFlag(
+      thread.history[pendingIndex].message,
     );
-  } else {
-    if (!Array.isArray(parsedBody.messages)) {
-      return Response.json({ error: "Invalid request body" }, { status: 400 });
+
+    thread = await memory.upsertMessage(threadId, {
+      id: pendingTmsg.id,
+      message: pendingTmsg.message,
+      modelSelection: thread.modelSelection,
+      usage: pendingTmsg.usage,
+    });
+    if (!thread || !canAccessThread(thread, userId)) {
+      return Response.json({ error: "Thread not found" }, { status: 404 });
     }
 
-    uiMessages = parsedBody.messages;
+    // meaning that we already have an assistant message for the user's message and
+    // it's likely a state issue for thinking this is a pending message.
+    if (thread.history[pendingIndex + 1]?.message.role === "assistant") {
+      return Response.json(
+        { error: "No pending thread message found" },
+        { status: 409 },
+      );
+    }
   }
 
-  await memory.replaceMessages(threadId, { messages: uiMessages });
-
-  if (
-    resolvedModel.runtimeProvider === "openrouter" &&
-    !process.env.OPENROUTER_API_KEY
-  ) {
-    return Response.json(
-      { error: "Missing OPENROUTER_API_KEY" },
-      { status: 500 },
-    );
-  }
-
-  const agent = await createRootAgent({
-    modelId: resolvedModel.id,
-    reasoningBudget: resolvedModelSelection.reasoningBudget,
-    runtimeProvider: resolvedModel.runtimeProvider,
-  });
-
-  const streamSession = await agent.streamThread({
-    threadId,
-    uiMessages,
-    options: {
+  const agent = await createRootAgent(
+    {
+      fs,
       modelSelection: {
-        providerId: resolvedModelSelection.providerId,
+        providerId: fullModelEntry.runtimeProvider,
         modelId: resolvedModelSelection.modelId,
         reasoningBudget: resolvedModelSelection.reasoningBudget,
       },
-      memory: {
-        memory,
-        compactionPolicy: {
-          maxContextTokens: Math.max(resolvedModel.contextLimits.total, 1),
-          reservedOutputTokens: Math.min(
-            resolvedModel.contextLimits.maxOutput,
-            4096,
-          ),
-        },
-        summarizeHistory: async (history) => {
-          // TODO: use a LLM based approach to compact the history, put the logic in the packages/protean.
-
-          const summaryText = history
-            .map((item) => {
-              const parts = item.message.parts as Array<{
-                type: string;
-                text?: string;
-              }>;
-
-              return parts
-                .filter((part) => part.type === "text")
-                .map((part) => part.text ?? "")
-                .join(" ")
-                .trim();
-            })
-            .filter((text) => text.length > 0)
-            .join("\n")
-            .slice(-4000);
-
-          return {
-            id: `summary-${Date.now()}`,
-            role: "user",
-            parts: [
-              {
-                type: "text",
-                text: summaryText || "Conversation summary.",
-              },
-            ],
-          };
-        },
-      },
     },
+    consoleLogger,
+  );
+
+  const compactionResult = await memory.compactIfNeeded(threadId, {
+    policy: {
+      maxContextTokens: fullModelEntry.contextLimits.total,
+      reservedOutputTokens: fullModelEntry.contextLimits.maxOutput,
+    },
+    summarizeHistory: async (history) => summarizeHistory(history),
   });
 
-  return streamSession.stream.toUIMessageStreamResponse({
+  if (compactionResult) {
+    thread = compactionResult.thread;
+    if (!thread) {
+      return Response.json({ error: "Thread not found" }, { status: 404 });
+    }
+  }
+
+  const activeHistory = thread.activeHistory
+    .filter((record) => record.deletedAt === null)
+    .sort((a, b) => a.ordinal - b.ordinal)
+    .map((record) => record.message);
+
+  const streamStartMs = Date.now();
+  const stream = await agent.stream({
+    messages: await convertToModelMessages(activeHistory),
+  });
+
+  return stream.toUIMessageStreamResponse({
     sendReasoning: true,
     sendSources: false,
-    originalMessages: uiMessages as never[],
-    onFinish: async ({ messages }) => {
-      await streamSession.persistFinish(messages);
+    originalMessages: activeHistory,
+    onFinish: async ({ isAborted, responseMessage }) => {
+      const reloaded = await memory.getThreadWithMessages(threadId);
+      if (!reloaded || !canAccessThread(reloaded, userId)) {
+        return;
+      }
+
+      const totalDurationMs = Math.max(Date.now() - streamStartMs, 0);
+      let inputTokens = 0;
+      let outputTokens = 0;
+
+      try {
+        if (!isAborted) {
+          const usage = await stream.usage;
+          inputTokens = usage.inputTokens ?? 0;
+          outputTokens = usage.outputTokens ?? 0;
+        }
+      } catch {
+        inputTokens = 0;
+        outputTokens = 0;
+      }
+
+      await memory.upsertMessage(threadId, {
+        message: responseMessage,
+        modelSelection: thread.modelSelection,
+        usage: {
+          inputTokens,
+          outputTokens,
+          totalDurationMs,
+        },
+      });
     },
     onError: (error) => {
+      console.error("Failed to finish agent run:", error);
+
       if (error instanceof Error) {
         return error.message;
       }
-
       return "Failed to stream response from model.";
     },
   });

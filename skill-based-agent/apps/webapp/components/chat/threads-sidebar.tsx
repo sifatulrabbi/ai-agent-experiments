@@ -11,7 +11,8 @@ import {
   StarIcon,
   Trash2Icon,
 } from "lucide-react";
-import type { ThreadRecord } from "@protean/agent-memory";
+import type { ThreadRecordTrimmed } from "@protean/agent-memory";
+import { formatCostUsd, formatTokenCount } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarUserMenu } from "@/components/chat/sidebar-user-menu";
@@ -31,7 +32,7 @@ import {
 import { useThreadApi } from "@/components/chat/use-thread-api";
 
 interface ThreadsSidebarProps {
-  threads: ThreadRecord[];
+  threads: ThreadRecordTrimmed[];
   userEmail?: string | null;
   userName?: string | null;
 }
@@ -119,12 +120,23 @@ export function ThreadsSidebar({
                     href={`/chats/t/${thread.id}`}
                   >
                     <p className="truncate font-medium text-sm">
-                      {thread.title.slice(0, 20)}
-                      {thread.title.length > 20 ? "..." : ""}
+                      {thread.title}
                     </p>
                     <p className="truncate text-muted-foreground text-xs">
                       {new Date(thread.updatedAt).toLocaleString()}
                     </p>
+                    {thread.usage.inputTokens + thread.usage.outputTokens >
+                    0 ? (
+                      <p className="truncate text-muted-foreground text-xs">
+                        {formatTokenCount(
+                          thread.usage.inputTokens + thread.usage.outputTokens,
+                        )}{" "}
+                        tokens
+                        {formatCostUsd(thread.usage.totalCostUsd)
+                          ? ` · ${formatCostUsd(thread.usage.totalCostUsd)}`
+                          : ""}
+                      </p>
+                    ) : null}
                   </Link>
 
                   <DropdownMenu>

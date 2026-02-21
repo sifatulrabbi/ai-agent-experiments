@@ -5,18 +5,24 @@ import type { FileEntry, FS } from "@protean/vfs";
 
 import { createHistoryCompactor } from "./compaction";
 import { ThreadMemoryError } from "./errors";
-import type {
-  CompactThreadOptions,
-  CompactThreadResult,
-  CreateThreadParams,
-  ReplaceThreadMessagesParams,
-  SaveThreadMessageParams,
-  ThreadMessageRecord,
-  ThreadModelSelection,
-  ThreadPricingCalculator,
-  ThreadRecord,
-  FsMemory,
-  UpdateThreadSettingsParams,
+import {
+  modelSelectionSchema,
+  reasoningBudgets,
+  type ModelSelection,
+} from "@protean/model-catalog";
+import {
+  type CompactThreadOptions,
+  type CompactThreadResult,
+  type CreateThreadParams,
+  type ReplaceThreadMessagesParams,
+  type SaveThreadMessageParams,
+  type ThreadMessageRecord,
+  type ThreadPricingCalculator,
+  type ThreadRecord,
+  type AgentMemory,
+  type UpdateThreadSettingsParams,
+  type ThreadRecordTrimmed,
+  type ThreadUsage,
 } from "./types";
 import {
   aggregateContextSize,
@@ -52,11 +58,7 @@ const threadMessageRecordSchema = z.object({
   error: z.string().nullable(),
 });
 
-const threadModelSelectionSchema: z.ZodType<ThreadModelSelection> = z.object({
-  providerId: z.string().min(1),
-  modelId: z.string().min(1),
-  reasoningBudget: z.string().min(1),
-});
+export { modelSelectionSchema };
 
 const contextSizeSchema = z.object({
   totalInputTokens: z.number(),
@@ -69,7 +71,7 @@ const threadRecordSchema: z.ZodType<ThreadRecord> = z.object({
   id: threadIdSchema,
   userId: z.string().min(1),
   title: z.string().min(1),
-  modelSelection: threadModelSelectionSchema,
+  modelSelection: modelSelectionSchema,
   history: z.array(threadMessageRecordSchema),
   activeHistory: z.array(threadMessageRecordSchema),
   lastCompactionOrdinal: z.number().int().min(1).nullable(),
@@ -131,14 +133,14 @@ export interface FsMemoryOptions {
 }
 
 /**
- * Creates an {@link FsMemory} backed by any `FS`-compatible filesystem.
+ * Creates an {@link AgentMemory} backed by any `FS`-compatible filesystem.
  *
  * Each thread is stored as a single `.json` file named
  * `thread.<id>.json` inside `dirPath`. All mutating operations are
  * serialised through an in-process write queue (`withLock`) to prevent
  * concurrent writes from producing corrupt files.
  */
-export function createFsMemory(options: FsMemoryOptions): FsMemory {
+export function createFsMemory(options: FsMemoryOptions): AgentMemory {
   const fs = options.fs;
   const pricingCalculator = options.pricingCalculator;
   const rootDir = options.dirPath || ".threads";
@@ -356,9 +358,27 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
    * Returns the thread with `threadId`, or `null` if it does not exist.
    * Waits for any in-flight writes to complete before reading.
    */
-  async function getThread(threadId: string): Promise<ThreadRecord | null> {
+  async function getThread(
+    threadId: string,
+  ): Promise<ThreadRecordTrimmed | null> {
     await waitForPendingWrites();
-    return readThread(threadId);
+    const thread = await readThread(threadId);
+    if (!thread) return null;
+
+    const { history, activeHistory, ...trimmed } = thread;
+    return trimmed;
+  }
+
+  /**
+   * Returns the thread with `threadId`, or `null` if it does not exist.
+   * Waits for any in-flight writes to complete before reading.
+   */
+  async function getThreadWithMessages(
+    threadId: string,
+  ): Promise<ThreadRecord | null> {
+    await waitForPendingWrites();
+    const thread = await readThread(threadId);
+    return thread;
   }
 
   /**
@@ -371,7 +391,7 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
   async function listThreads(params?: {
     includeDeleted?: boolean;
     userId?: string;
-  }): Promise<ThreadRecord[]> {
+  }): Promise<ThreadRecordTrimmed[]> {
     await waitForPendingWrites();
 
     let entries: FileEntry[];
@@ -402,19 +422,22 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
     return threads
       .filter((thread) => includeDeleted || thread.deletedAt === null)
       .filter((thread) => (userId ? thread.userId === userId : true))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map(({ history, activeHistory, ...trimmedThread }) => trimmedThread);
   }
 
   /**
-   * Appends a new message record to both `history` and `activeHistory`,
-   * then recalculates usage and context-size totals.
+   * Inserts a new message or updates an existing one matched by `message.id`.
    *
-   * The `ordinal` for the new record is derived from the last entry in
-   * `history` + 1, ensuring it is always strictly increasing.
+   * - **Update path:** finds the record whose `message.id` matches, refreshes
+   *   its `message`, `usage`, and `error` fields, bumps `version`, and
+   *   updates `updatedAt`. The original `ordinal` and `createdAt` are preserved.
+   * - **Insert path:** behaves identically to `saveMessage` — appends a new
+   *   record with the next ordinal.
    *
    * Returns `null` if the thread does not exist.
    */
-  async function saveMessage(
+  async function upsertMessage(
     threadId: string,
     payload: SaveThreadMessageParams,
   ): Promise<ThreadRecord | null> {
@@ -427,10 +450,10 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
         return null;
       }
 
-      const nextOrdinal =
-        thread.history.length > 0
-          ? (thread.history[thread.history.length - 1]?.ordinal ?? 0) + 1
-          : 1;
+      const messageId = payload.id;
+      const existingIndex = payload.id
+        ? thread.history.findIndex((record) => record.id === messageId)
+        : -1;
 
       const usage = {
         inputTokens: payload.usage.inputTokens,
@@ -445,24 +468,73 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
         }),
       };
 
-      const messageRecord: ThreadMessageRecord = {
-        id: payload.id ?? randomUUID(),
-        ordinal: nextOrdinal,
-        version: 1,
-        message: payload.message,
-        usage,
-        createdAt: payload.createdAt ?? now,
-        updatedAt: now,
-        deletedAt: null,
-        error: payload.error ?? null,
-      };
+      let updatedThread: ThreadRecord;
 
-      const updatedThread: ThreadRecord = {
-        ...thread,
-        history: [...thread.history, messageRecord],
-        activeHistory: [...thread.activeHistory, messageRecord],
-        updatedAt: now,
-      };
+      if (existingIndex !== -1) {
+        // ── Update existing record ──
+        const existing = thread.history[existingIndex]!;
+
+        const resolvedUsage: ThreadUsage = {
+          inputTokens: existing.usage.inputTokens + usage.inputTokens,
+          outputTokens: existing.usage.outputTokens + usage.outputTokens,
+          totalCostUsd: existing.usage.totalCostUsd + usage.totalCostUsd,
+          totalDurationMs:
+            existing.usage.totalDurationMs + usage.totalDurationMs,
+        };
+
+        const updatedRecord: ThreadMessageRecord = {
+          ...existing,
+          message: payload.message,
+          usage: resolvedUsage,
+          version: existing.version + 1,
+          updatedAt: now,
+          error: payload.error ?? existing.error,
+        };
+
+        const nextHistory = [...thread.history];
+        nextHistory[existingIndex] = updatedRecord;
+
+        // Mirror into activeHistory (same id lookup).
+        const activeIndex = thread.activeHistory.findIndex(
+          (record) => record.id === messageId,
+        );
+        const nextActiveHistory = [...thread.activeHistory];
+        if (activeIndex !== -1) {
+          nextActiveHistory[activeIndex] = updatedRecord;
+        }
+
+        updatedThread = {
+          ...thread,
+          history: nextHistory,
+          activeHistory: nextActiveHistory,
+          updatedAt: now,
+        };
+      } else {
+        // ── Insert new record ──
+        const nextOrdinal =
+          thread.history.length > 0
+            ? (thread.history[thread.history.length - 1]?.ordinal ?? 0) + 1
+            : 1;
+
+        const messageRecord: ThreadMessageRecord = {
+          id: randomUUID(),
+          ordinal: nextOrdinal,
+          version: 1,
+          message: payload.message,
+          usage,
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: null,
+          error: payload.error ?? null,
+        };
+
+        updatedThread = {
+          ...thread,
+          history: [...thread.history, messageRecord],
+          activeHistory: [...thread.activeHistory, messageRecord],
+          updatedAt: now,
+        };
+      }
 
       const withUsageAndContext = recalculateUsageAndContext(updatedThread);
       await writeThread(withUsageAndContext);
@@ -582,7 +654,6 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
       const updatedThread: ThreadRecord = {
         ...thread,
         activeHistory,
-        lastCompactionOrdinal: null,
         updatedAt: now,
       };
 
@@ -593,12 +664,6 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
     });
   }
 
-  /**
-   * Delegates to {@link HistoryCompactor.compactIfNeeded} and persists the
-   * result only when an actual compaction occurred (`didCompact: true`).
-   *
-   * Returns `null` if the thread does not exist.
-   */
   async function compactIfNeeded(
     threadId: string,
     options: CompactThreadOptions,
@@ -611,15 +676,14 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
       }
 
       const compacted = await compactor.compactIfNeeded(thread, options);
-      const nextThread = recalculateUsageAndContext(compacted.thread);
 
       if (compacted.didCompact) {
-        await writeThread(nextThread);
+        await writeThread(compacted.thread);
       }
 
       return {
         didCompact: compacted.didCompact,
-        thread: nextThread,
+        thread: compacted.thread,
       };
     });
   }
@@ -711,13 +775,14 @@ export function createFsMemory(options: FsMemoryOptions): FsMemory {
   }
 
   return {
+    // saveMessage,
     createThread,
     getThread,
+    getThreadWithMessages,
     listThreads,
-    saveMessage,
+    upsertMessage,
     replaceMessages,
     softDeleteThread,
-    rebuildActiveHistory,
     compactIfNeeded,
     updateThreadSettings,
     updateThreadUsage,

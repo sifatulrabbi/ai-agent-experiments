@@ -1,6 +1,7 @@
 "use client";
 
 import type { UIMessage } from "ai";
+import type { ModelSelection } from "@protean/model-catalog";
 import {
   AlertCircleIcon,
   CheckCircle2Icon,
@@ -25,16 +26,13 @@ import {
   MessageContent,
   MessageToolbar,
 } from "@/components/ai-elements/message";
-import {
-  getModelById,
-  type AIModelProviderEntry,
-} from "@/components/chat/model-catalog";
+import { getModelById } from "@protean/model-catalog";
+import { useModelCatalog } from "@/components/chat/model-catalog-provider";
 import { ModelProviderDropdown } from "@/components/chat/model-provider-dropdown";
+import { useThreadChatContext } from "@/components/chat/thread-chat-provider";
 import { ThreadMessageParts } from "@/components/chat/thread-message-parts";
-import {
-  messageKeyFor,
-  type ThreadStatus,
-} from "@/components/chat/thread-ui-shared";
+import { messageKeyFor } from "@/components/chat/thread-ui-shared";
+import { formatCostUsd, formatTokenCount } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -60,24 +58,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-interface ThreadMessagesProps {
-  currentModelSelection: { modelId: string; providerId: string };
-  currentThinkingBudget: string;
-  messages: UIMessage[];
-  onEditUserMessage: (payload: {
-    messageId: string;
-    modelSelection?: { modelId: string; providerId: string };
-    reasoningBudget?: string;
-    text: string;
-  }) => Promise<void>;
-  onRerunAssistantMessage: (payload: {
-    messageId: string;
-    modelSelection?: { modelId: string; providerId: string };
-  }) => Promise<void>;
-  providers: AIModelProviderEntry[];
-  status: ThreadStatus;
-}
-
 function getMessageText(message: UIMessage): string {
   return message.parts
     .filter((part) => part.type === "text")
@@ -86,30 +66,27 @@ function getMessageText(message: UIMessage): string {
     .trim();
 }
 
-export function ThreadMessages({
-  currentModelSelection,
-  currentThinkingBudget,
-  messages,
-  status,
-  onEditUserMessage,
-  onRerunAssistantMessage,
-  providers,
-}: ThreadMessagesProps) {
+export function ThreadMessages() {
+  const {
+    handleEditUserMessage,
+    handleRerunAssistantMessage,
+    messageUsageMap,
+    messages,
+    modelSelection: currentModelSelection,
+    status,
+  } = useThreadChatContext();
+  const providers = useModelCatalog();
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [editModelSelection, setEditModelSelection] = useState<{
-    modelId: string;
-    providerId: string;
-  } | null>(null);
+  const [editModelSelection, setEditModelSelection] =
+    useState<ModelSelection | null>(null);
   const [editReasoningBudget, setEditReasoningBudget] = useState<string | null>(
     null,
   );
   const [rerunMessageId, setRerunMessageId] = useState<string | null>(null);
-  const [rerunModelSelection, setRerunModelSelection] = useState<{
-    modelId: string;
-    providerId: string;
-  } | null>(null);
+  const [rerunModelSelection, setRerunModelSelection] =
+    useState<ModelSelection | null>(null);
   const [toastState, setToastState] = useState<{
     description?: string;
     title: string;
@@ -200,9 +177,9 @@ export function ThreadMessages({
       setEditingMessageId(message.id);
       setEditValue(getMessageText(message));
       setEditModelSelection(currentModelSelection);
-      setEditReasoningBudget(currentThinkingBudget);
+      setEditReasoningBudget(currentModelSelection.reasoningBudget);
     },
-    [currentModelSelection, currentThinkingBudget],
+    [currentModelSelection],
   );
 
   const cancelEdit = useCallback(() => {
@@ -215,18 +192,22 @@ export function ThreadMessages({
   const saveEdit = useCallback(async () => {
     if (!editingMessageId) return;
 
+    const base = editModelSelection ?? currentModelSelection;
     const payload = {
       messageId: editingMessageId,
-      modelSelection: editModelSelection ?? currentModelSelection,
-      reasoningBudget:
-        editReasoningBudget ?? selectedEditModel?.reasoning.defaultValue,
+      modelSelection: {
+        ...base,
+        reasoningBudget: (editReasoningBudget ??
+          selectedEditModel?.reasoning.defaultValue ??
+          base.reasoningBudget) as ModelSelection["reasoningBudget"],
+      },
       text: editValue,
     };
 
     cancelEdit();
 
     try {
-      await onEditUserMessage(payload);
+      await handleEditUserMessage(payload);
       showToast({
         title: "Message updated",
         variant: "default",
@@ -247,7 +228,7 @@ export function ThreadMessages({
     editValue,
     editingMessageId,
     selectedEditModel?.reasoning.defaultValue,
-    onEditUserMessage,
+    handleEditUserMessage,
     showToast,
   ]);
 
@@ -269,7 +250,10 @@ export function ThreadMessages({
       return;
     }
 
-    const payload = {
+    const payload: {
+      messageId: string;
+      modelSelection?: ModelSelection;
+    } = {
       messageId: rerunMessageId,
       modelSelection: rerunModelSelection ?? currentModelSelection,
     };
@@ -277,7 +261,7 @@ export function ThreadMessages({
     closeRerunDialog();
 
     try {
-      await onRerunAssistantMessage(payload);
+      await handleRerunAssistantMessage(payload);
       showToast({
         title: "Rerun started",
         variant: "default",
@@ -293,7 +277,7 @@ export function ThreadMessages({
   }, [
     closeRerunDialog,
     currentModelSelection,
-    onRerunAssistantMessage,
+    handleRerunAssistantMessage,
     rerunMessageId,
     rerunModelSelection,
     showToast,
@@ -343,7 +327,6 @@ export function ThreadMessages({
                           <ModelProviderDropdown
                             disabled={isBusy}
                             onChange={setEditModelSelection}
-                            providers={providers}
                             value={editModelSelection ?? currentModelSelection}
                           />
                           {supportsEditThinking ? (
@@ -445,9 +428,7 @@ export function ThreadMessages({
                   (message.role === "assistant" || message.role === "user") ? (
                     <MessageToolbar
                       className={
-                        message.role === "user"
-                          ? "mt-0 justify-end"
-                          : "mt-0 justify-start"
+                        message.role === "user" ? "mt-0 justify-end" : "mt-0"
                       }
                     >
                       <MessageActions>
@@ -490,6 +471,31 @@ export function ThreadMessages({
                           </MessageAction>
                         ) : null}
                       </MessageActions>
+
+                      {(() => {
+                        const usage = messageUsageMap[message.id];
+                        if (!usage || message.role !== "assistant") {
+                          return null;
+                        }
+                        const cost = formatCostUsd(usage.totalCostUsd);
+                        return (
+                          <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+                            <span>
+                              {formatTokenCount(usage.inputTokens)} in
+                            </span>
+                            <span>·</span>
+                            <span>
+                              {formatTokenCount(usage.outputTokens)} out
+                            </span>
+                            {cost ? (
+                              <>
+                                <span>·</span>
+                                <span>{cost}</span>
+                              </>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
                     </MessageToolbar>
                   ) : null}
                 </Message>
@@ -521,7 +527,6 @@ export function ThreadMessages({
             <ModelProviderDropdown
               disabled={isBusy}
               onChange={setRerunModelSelection}
-              providers={providers}
               value={rerunModelSelection ?? currentModelSelection}
             />
           </div>

@@ -1,9 +1,8 @@
 "use client";
 
-interface ThreadHeaderProps {
-  activeThreadId: string | null;
-}
+import { useThreadChatContext } from "@/components/chat/thread-chat-provider";
 
-export function ThreadHeader(_: ThreadHeaderProps) {
+export function ThreadHeader() {
+  const { activeThreadId: _ } = useThreadChatContext();
   return null;
 }

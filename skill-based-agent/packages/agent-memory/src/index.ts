@@ -9,15 +9,20 @@
  */
 export { ThreadMemoryError } from "./errors";
 export { createHistoryCompactor } from "./compaction";
-export { createFsMemory } from "./fs-memory";
+export { createFsMemory, modelSelectionSchema } from "./fs-memory";
 export type { FsMemoryOptions } from "./fs-memory";
 
+export { reasoningBudgets } from "./types";
 export type {
+  AgentMemory,
   ThreadMessageRecord,
   ThreadRecord,
+  ThreadRecordTrimmed,
   ThreadUsage,
   ContextSize,
-  FsMemory,
+  ModelSelection,
+  ReasoningBudget,
+  /** @deprecated Use ModelSelection instead. */
   ThreadModelSelection,
   ThreadPricingCalculator,
   CompactionPolicy,
