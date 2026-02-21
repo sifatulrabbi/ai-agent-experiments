@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import type { UIMessage } from "ai";
 import type {
   ModelSelection,
@@ -12,6 +13,8 @@ import { ThreadErrorAlert } from "@/components/chat/thread-error-alert";
 import { ThreadHeader } from "@/components/chat/thread-header";
 import { ThreadMessages } from "@/components/chat/thread-messages";
 import { ThreadPromptInput } from "@/components/chat/thread-user-input";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { WorkspaceFilesPanel } from "@/components/chat/workspace-files-panel";
 
 interface ThreadRouteContentProps {
   defaultModelSelection: ModelSelection;
@@ -40,10 +43,20 @@ export function ThreadRouteContent({
         initialThreadId={initialThreadId}
         providers={providers}
       >
-        <ThreadHeader />
-        <ThreadMessages />
-        <ThreadErrorAlert />
-        <ThreadPromptInput />
+        <SidebarProvider
+          defaultOpen={true}
+          style={{ "--sidebar-width": "20rem" } as React.CSSProperties}
+        >
+          <SidebarInset>
+            <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
+              <ThreadHeader />
+              <ThreadMessages />
+              <ThreadErrorAlert />
+              <ThreadPromptInput />
+            </div>
+          </SidebarInset>
+          <WorkspaceFilesPanel />
+        </SidebarProvider>
       </ThreadChatProvider>
     </ModelCatalogProvider>
   );

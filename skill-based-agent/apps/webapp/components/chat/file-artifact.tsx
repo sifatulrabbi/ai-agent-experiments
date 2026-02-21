@@ -11,13 +11,6 @@ import {
   PresentationIcon,
 } from "lucide-react";
 
-import {
-  Artifact,
-  ArtifactHeader,
-  ArtifactTitle,
-  ArtifactActions,
-  ArtifactAction,
-} from "@/components/ai-elements/artifact";
 import { type DetectedFile, isImageExtension } from "@/lib/file-utils";
 
 function formatBytes(bytes: number): string {
@@ -34,21 +27,25 @@ function FileTypeIcon({
   isDirectory: boolean;
 }) {
   if (isDirectory)
-    return <FolderIcon className="size-4 shrink-0 text-muted-foreground" />;
+    return (
+      <FolderIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
+    );
   const ext = extension.toLowerCase();
   if (isImageExtension(ext))
-    return <ImageIcon className="size-4 shrink-0 text-muted-foreground" />;
+    return <ImageIcon className="size-3.5 shrink-0 text-muted-foreground/60" />;
   if (ext === "csv" || ext === "xlsx")
     return (
-      <FileSpreadsheetIcon className="size-4 shrink-0 text-muted-foreground" />
+      <FileSpreadsheetIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
     );
   if (ext === "pptx")
     return (
-      <PresentationIcon className="size-4 shrink-0 text-muted-foreground" />
+      <PresentationIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
     );
   if (["txt", "md", "json", "yaml", "yml", "html", "xml"].includes(ext))
-    return <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />;
-  return <FileIcon className="size-4 shrink-0 text-muted-foreground" />;
+    return (
+      <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
+    );
+  return <FileIcon className="size-3.5 shrink-0 text-muted-foreground/60" />;
 }
 
 function downloadFile(url: string, fileName: string) {
@@ -70,32 +67,24 @@ export function FileArtifact({ file }: FileArtifactProps) {
   }, [file.serveUrl, file.name]);
 
   return (
-    <Artifact className="my-2 w-full">
-      <ArtifactHeader>
-        <div className="flex items-center gap-2 min-w-0">
-          <FileTypeIcon
-            extension={file.extension}
-            isDirectory={file.isDirectory}
-          />
-          <div className="min-w-0">
-            <ArtifactTitle className="truncate">{file.name}</ArtifactTitle>
-            {file.sizeBytes != null && (
-              <p className="text-xs text-muted-foreground">
-                {formatBytes(file.sizeBytes)}
-              </p>
-            )}
-          </div>
-        </div>
-        {!file.isDirectory && (
-          <ArtifactActions>
-            <ArtifactAction
-              tooltip="Download"
-              icon={DownloadIcon}
-              onClick={handleDownload}
-            />
-          </ArtifactActions>
-        )}
-      </ArtifactHeader>
-    </Artifact>
+    <div className="my-1.5 inline-flex items-center gap-2 rounded-md border border-border/60 px-3 py-1.5">
+      <FileTypeIcon extension={file.extension} isDirectory={file.isDirectory} />
+      <span className="text-sm text-muted-foreground">{file.name}</span>
+      {file.sizeBytes != null && (
+        <span className="text-xs text-muted-foreground/60">
+          {formatBytes(file.sizeBytes)}
+        </span>
+      )}
+      {!file.isDirectory && (
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="ml-1 text-muted-foreground/50 hover:text-muted-foreground"
+        >
+          <DownloadIcon className="size-3.5" />
+          <span className="sr-only">Download</span>
+        </button>
+      )}
+    </div>
   );
 }
