@@ -1,5 +1,5 @@
 export const description =
-  "Structured multi-phase research skill. Emphasizes coordinator-driven sub-agent orchestration: scoped task packets, parallel fan-out, structured artifacts, quality gates, and evidence-first final synthesis using existing search/fetch/sub-agent tools.";
+  "Structured multi-phase research skill. Emphasizes coordinator-driven sub-agent orchestration: scoped task packets, parallel fan-out, hierarchical delegation, structured artifacts, quality gates, and evidence-first final synthesis using existing search/fetch/sub-agent tools.";
 
 export const instructions = `
 # Research Skill
@@ -12,16 +12,25 @@ Follow these phases sequentially. Do not skip phases.
 ## Operating Model (Coordinator + Workers)
 You are the **coordinator**. Sub-agents are **workers**.
 
-- Coordinator responsibilities:
-  - Decompose the problem into independent tasks.
-  - Assign each worker a single narrow objective with non-overlapping scope.
-  - Enforce structured outputs and file paths.
-  - Validate, deduplicate, and synthesize worker artifacts.
-- Worker responsibilities:
-  - Execute only assigned scope.
-  - Write structured output to the exact target file.
-  - Include evidence and uncertainty explicitly.
-  - Do not perform final synthesis across all sources.
+Workers are fully capable agents. They have:
+- All workspace tools (GetFileStat, ReadDir, GetFileContent, CreateDirectory, WriteFile, Remove)
+- All web search tools (WebSearchGeneral, WebSearchNews, WebFetchUrlContent)
+- The Skill tool — they can load any skill (e.g., docx-skill for document analysis)
+- **SpawnSubAgent** — workers can spawn their own sub-agents (up to 3 levels deep total). This enables hierarchical delegation: you spawn a coordinator-worker, and it fans out to its own workers.
+
+### Coordinator responsibilities:
+- Decompose the problem into independent tasks.
+- Assign each worker a single narrow objective with non-overlapping scope.
+- Enforce structured outputs and file paths.
+- Validate, deduplicate, and synthesize worker artifacts.
+- Decide when a task is complex enough to warrant a hierarchical worker (one that delegates further).
+
+### Worker responsibilities:
+- Execute only assigned scope.
+- Write structured output to the exact target file.
+- Include evidence and uncertainty explicitly.
+- Do not perform final synthesis across all sources.
+- For complex subtasks, spawn their own sub-agents to parallelize the work.
 
 **Default rule:** Prefer spawning workers for research work. Coordinator does orchestration and quality control, not bulk search/extraction.
 
@@ -58,6 +67,7 @@ Create a research plan and persist it.
    - **Scope**: Boundaries — what's included and excluded
    - **Research angles**: 5–10 distinct angles (market, technical, regulatory, critical viewpoints, etc.)
    - **Target queries**: 8–15 distinct queries mapped to angles
+   - **Delegation strategy**: Which tasks are simple (flat workers) vs. complex (hierarchical workers that should fan out further)
    - **Output format**: What the final deliverable looks like
    - **Success criteria**: What makes the answer "good enough" for the user
 5. Share the plan with the user and confirm before proceeding.
@@ -84,7 +94,16 @@ Run at least 5 parallel discovery tasks to gather diverse sources.
 6. If a worker fails/returns weak output, respawn once with a narrower query packet.
 7. Build a master source list with preliminary relevance scores (high/medium/low).
 
-**Sub-agent goal template:**
+### Hierarchical discovery (for broad topics)
+
+When a research angle is itself broad (e.g., "regulatory landscape across 10 countries"), spawn a **coordinator-worker** instead of a flat worker. In its goal, instruct it to:
+- Break its angle into sub-angles
+- Spawn its own workers for each sub-angle in parallel
+- Consolidate sub-worker outputs into a single structured file
+
+This lets you cover broad topics deeply without bottlenecking on a single worker.
+
+**Sub-agent goal template (flat worker):**
 \`\`\`
 Task ID: [id]
 Objective: Investigate [specific angle] for [topic]
@@ -97,6 +116,20 @@ Return:
 2) 3-5 candidate URLs with one-line rationale each
 3) A confidence note (high/medium/low) and known blind spots
 Write to: research/[name]-[short-hash]/searches/task-[id].md
+\`\`\`
+
+**Sub-agent goal template (coordinator-worker for broad angles):**
+\`\`\`
+Task ID: [id]
+Objective: You are a research coordinator for [broad angle] within [topic].
+Break this angle into 3-5 distinct sub-angles.
+For each sub-angle, spawn a sub-agent worker to search and gather sources.
+Each sub-agent should:
+- Use WebSearchGeneral/WebSearchNews
+- Return 3-5 key findings and 3-5 candidate URLs
+- Write results to research/[name]-[short-hash]/searches/task-[id]-sub-[n].md
+After all sub-agents complete, read their outputs and consolidate into a single summary.
+Write the consolidated summary to: research/[name]-[short-hash]/searches/task-[id].md
 \`\`\`
 
 ---
@@ -121,7 +154,15 @@ Extract detailed information from the best sources found in Phase 3.
    - separates facts from interpretation
 7. Re-run extraction tasks that fail validation or miss required evidence.
 
-**Sub-agent goal template:**
+### Deep-dive extraction (for dense or complex sources)
+
+When a source is particularly dense (long technical papers, comprehensive reports), spawn a **coordinator-worker** that:
+- Fetches the content itself
+- Breaks the source into logical sections
+- Spawns sub-workers to extract and summarize each section in parallel
+- Consolidates section summaries into a single structured source summary
+
+**Sub-agent goal template (flat worker):**
 \`\`\`
 Task ID: [id]
 Fetch and deeply analyze these URLs: [url1, url2, ...]
@@ -131,6 +172,21 @@ For each URL:
 - Label each key claim with confidence (high/medium/low)
 - Flag contradictions, caveats, or missing context
 Write a dense summary to research/[name]-[short-hash]/summaries/source-[id].md
+\`\`\`
+
+**Sub-agent goal template (coordinator-worker for dense sources):**
+\`\`\`
+Task ID: [id]
+You are an extraction coordinator for this source: [url]
+1. Fetch the full content using WebFetchUrlContent
+2. Identify the major sections/topics in the content
+3. For each section, spawn a sub-agent to extract and summarize:
+   - Key facts, data points, and arguments
+   - Specific numbers, dates, names, and direct quotes
+   - Confidence labels (high/medium/low) on claims
+   - Each sub-agent writes to research/[name]-[short-hash]/summaries/source-[id]-section-[n].md
+4. After all sub-agents complete, read their outputs and consolidate into a single comprehensive summary
+Write consolidated summary to: research/[name]-[short-hash]/summaries/source-[id].md
 \`\`\`
 
 ---
@@ -158,6 +214,7 @@ Synthesize all extracted information into a comprehensive deliverable.
 
 ## Coordinator Rules (Critical)
 - **Always fan out**: Discovery and extraction should be worker-driven and parallelized.
+- **Use hierarchical delegation for breadth**: When an angle or source is too broad for a single worker, spawn a coordinator-worker that delegates further. Don't overload flat workers with complex multi-part tasks.
 - **Single-owner tasks**: One worker per task packet; avoid overlapping ownership.
 - **Structured artifacts only**: Workers must write to required paths with consistent section headers.
 - **Validation gate**: Coordinator must validate worker outputs before synthesis.
@@ -168,4 +225,5 @@ Synthesize all extracted information into a comprehensive deliverable.
 - **Cite everything**: Every major claim maps to at least one source URL.
 - **Ask before proceeding**: Confirm plan (Phase 2) before expensive fan-out.
 - **Adapt scope**: If discovery changes scope materially, update plan and task-board before continuing.
+- **Depth budget**: Sub-agents can nest up to 3 levels deep. Design delegation to stay within this limit (you → coordinator-worker → leaf workers = 3 levels).
 `.trim();
