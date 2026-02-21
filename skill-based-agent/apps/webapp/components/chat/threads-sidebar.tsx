@@ -37,6 +37,31 @@ interface ThreadsSidebarProps {
   userName?: string | null;
 }
 
+const serverTimestampFormatter = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "UTC",
+});
+
+function formatThreadUpdatedAt(value: string | Date, mounted: boolean): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  if (mounted) {
+    return date.toLocaleString();
+  }
+
+  return `${serverTimestampFormatter.format(date)} UTC`;
+}
+
+function sanitizeIdSegment(value: string): string {
+  const sanitized = value.toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+  return sanitized.length > 0 ? sanitized : "item";
+}
+
 export function ThreadsSidebar({
   threads,
   userEmail,
@@ -49,6 +74,11 @@ export function ThreadsSidebar({
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setThreadItems(threads);
@@ -88,7 +118,7 @@ export function ThreadsSidebar({
     [deleteThread, pathname, router],
   );
 
-  const sidebarContent = (
+  const renderSidebarContent = (menuScope: "desktop" | "mobile") => (
     <>
       <Button asChild className="w-full justify-start" size="sm">
         <Link href="/chats/new">
@@ -107,6 +137,9 @@ export function ThreadsSidebar({
             threadItems.map((thread) => {
               const isActive = pathname === `/chats/t/${thread.id}`;
               const isDeleting = deletingThreadId === thread.id;
+              const idSegment = sanitizeIdSegment(thread.id);
+              const triggerId = `thread-actions-${menuScope}-${idSegment}`;
+              const contentId = `${triggerId}-content`;
 
               return (
                 <div
@@ -123,7 +156,7 @@ export function ThreadsSidebar({
                       {thread.title}
                     </p>
                     <p className="truncate text-muted-foreground text-xs">
-                      {new Date(thread.updatedAt).toLocaleString()}
+                      {formatThreadUpdatedAt(thread.updatedAt, mounted)}
                     </p>
                     {thread.usage.inputTokens + thread.usage.outputTokens >
                     0 ? (
@@ -140,7 +173,7 @@ export function ThreadsSidebar({
                   </Link>
 
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                    <DropdownMenuTrigger asChild id={triggerId}>
                       <Button
                         className="mt-1.5 mr-1 h-7 w-7 shrink-0 p-0 text-muted-foreground opacity-80 hover:opacity-100"
                         disabled={isDeleting}
@@ -152,7 +185,11 @@ export function ThreadsSidebar({
                       </Button>
                     </DropdownMenuTrigger>
 
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent
+                      align="end"
+                      aria-labelledby={triggerId}
+                      id={contentId}
+                    >
                       <DropdownMenuItem
                         onSelect={(event) => {
                           event.preventDefault();
@@ -197,31 +234,34 @@ export function ThreadsSidebar({
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden h-screen w-72 flex-col border-r border-sidebar-border bg-sidebar p-3 md:flex">
-        {sidebarContent}
+      <aside className="hidden h-screen w-72 flex-col border-r border-sidebar-border bg-sidebar p-3 min-[1440px]:flex">
+        {renderSidebarContent("desktop")}
       </aside>
 
-      {/* Mobile toggle + sheet */}
-      <div className="fixed top-3 left-3 z-40 md:hidden">
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button size="icon" variant="outline">
-              <MenuIcon className="size-5" />
-              <span className="sr-only">Open sidebar</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent
-            side="left"
-            showCloseButton={false}
-            className="flex w-72 flex-col bg-sidebar p-3"
-          >
-            <SheetHeader className="p-0">
-              <SheetTitle className="sr-only">Chat threads</SheetTitle>
-            </SheetHeader>
-            {sidebarContent}
-          </SheetContent>
-        </Sheet>
-      </div>
+      {/* Mobile toggle + sheet — client-only to avoid SSR double-rendering
+          sidebarContent which causes Radix ID hydration mismatches */}
+      {mounted && (
+        <div className="fixed top-3 left-3 z-40 min-[1440px]:hidden">
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button size="icon" variant="outline">
+                <MenuIcon className="size-5" />
+                <span className="sr-only">Open sidebar</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent
+              side="left"
+              showCloseButton={false}
+              className="flex w-72 flex-col bg-sidebar p-3"
+            >
+              <SheetHeader className="p-0">
+                <SheetTitle className="sr-only">Chat threads</SheetTitle>
+              </SheetHeader>
+              {renderSidebarContent("mobile")}
+            </SheetContent>
+          </Sheet>
+        </div>
+      )}
     </>
   );
 }

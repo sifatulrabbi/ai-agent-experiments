@@ -12,7 +12,7 @@ export function ThreadHeader() {
   return (
     <>
       {/* Mobile only: toggle button for the files sheet */}
-      <div className="fixed top-3 right-3 z-40 md:hidden">
+      <div className="fixed top-3 right-3 z-40 lg:hidden">
         <Button size="icon" variant="outline" onClick={toggleSidebar}>
           <FolderOpenIcon className="size-5" />
           <span className="sr-only">Files</span>
