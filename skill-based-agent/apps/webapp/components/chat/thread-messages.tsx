@@ -11,6 +11,7 @@ import {
   MessageSquareIcon,
   PencilIcon,
   RotateCcwIcon,
+  SparklesIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -32,7 +33,7 @@ import { ModelProviderDropdown } from "@/components/chat/model-provider-dropdown
 import { useThreadChatContext } from "@/components/chat/thread-chat-provider";
 import { ThreadMessageParts } from "@/components/chat/thread-message-parts";
 import { messageKeyFor } from "@/components/chat/thread-ui-shared";
-import { formatCostUsd, formatTokenCount } from "@/lib/utils";
+import { cn, formatCostUsd, formatTokenCount } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -502,6 +503,16 @@ export function ThreadMessages() {
               );
             })
           )}
+          {messages.length > 0 ? (
+            <div className="flex justify-start">
+              <SparklesIcon
+                className={cn(
+                  "size-4 transition-colors duration-700",
+                  isBusy ? "animate-spark-cycle" : "text-muted-foreground/50",
+                )}
+              />
+            </div>
+          ) : null}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>

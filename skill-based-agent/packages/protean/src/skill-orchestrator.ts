@@ -53,15 +53,26 @@ export async function createSkillOrchestrator(
     });
   });
 
+  logger.debug(`[Orchestrator] Initialized`, {
+    agentId: cfg.agentId ?? "anonymous",
+    baseTools: alwaysActiveTools,
+    skills: Array.from(skillsRegistry.keys()),
+    totalToolCount: Object.keys(allTools).length,
+  });
+
   function loadSkill(id: string): {
     skillId: string;
     instructions: string;
     error: string | null;
   } {
-    logger.info(`Loading skill ${id}`);
+    logger.info(`[Orchestrator] Skill load requested`, { skillId: id });
 
     const skill = skillsRegistry.get(id);
     if (!skill) {
+      logger.warn(`[Orchestrator] Skill not found`, {
+        skillId: id,
+        available: Array.from(skillsRegistry.keys()),
+      });
       return {
         skillId: id,
         instructions: "",
@@ -70,7 +81,7 @@ export async function createSkillOrchestrator(
     }
 
     if (activeSkillIds.has(id)) {
-      logger.debug(`Skill ${id} is already loaded`);
+      logger.debug(`[Orchestrator] Skill already loaded`, { skillId: id });
       return {
         skillId: id,
         instructions: `Skill "${id}" is already loaded.`,
@@ -79,7 +90,12 @@ export async function createSkillOrchestrator(
     }
 
     activeSkillIds.add(id);
-    logger.debug(`Skill ${id} loaded successfully.`);
+    const toolNames = Object.keys(skill.tools);
+    logger.info(`[Orchestrator] Skill loaded`, {
+      skillId: id,
+      activatedTools: toolNames,
+      activeSkillCount: activeSkillIds.size,
+    });
     return {
       skillId: id,
       instructions: skill.instructions,
