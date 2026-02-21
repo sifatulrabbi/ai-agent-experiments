@@ -1,7 +1,7 @@
 import {
   getDefaultModelSelection,
   getModelCatalog,
-} from "@/lib/server/models/model-catalog";
+} from "@protean/model-catalog";
 
 export async function GET() {
   return Response.json(

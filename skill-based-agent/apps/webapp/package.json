@@ -18,6 +18,7 @@
     "@daytonaio/sdk": "^0.141.0",
     "@openrouter/ai-sdk-provider": "^2.2.3",
     "@protean/agent-memory": "workspace:*",
+    "@protean/model-catalog": "workspace:*",
     "@protean/protean": "workspace:*",
     "@protean/vfs": "workspace:*",
     "@protean/logger": "workspace:*",

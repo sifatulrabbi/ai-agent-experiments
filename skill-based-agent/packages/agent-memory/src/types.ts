@@ -56,7 +56,7 @@ export interface ThreadRecord {
   id: string;
   userId: string;
   title: string;
-  modelSelection: ThreadModelSelection;
+  modelSelection: ModelSelection;
   history: ThreadMessageRecord[];
   activeHistory: ThreadMessageRecord[];
   lastCompactionOrdinal: number | null;
@@ -72,12 +72,22 @@ export type ThreadRecordTrimmed = Omit<
   "history" | "activeHistory"
 >;
 
-/** Persisted model/provider selection per thread. */
-export interface ThreadModelSelection {
-  providerId: string;
-  modelId: string;
-  reasoningBudget: string;
-}
+/**
+ * @deprecated Import from `@protean/model-catalog` instead.
+ */
+export { reasoningBudgets } from "@protean/model-catalog";
+
+/**
+ * @deprecated Import from `@protean/model-catalog` instead.
+ */
+export type { ReasoningBudget, ModelSelection } from "@protean/model-catalog";
+
+import type { ModelSelection } from "@protean/model-catalog";
+
+/**
+ * @deprecated Use {@link ModelSelection} from `@protean/model-catalog` instead.
+ */
+export type ThreadModelSelection = ModelSelection;
 
 /** Pluggable cost estimator injected at `createFsMemory` time. */
 export interface ThreadPricingCalculator {
@@ -94,14 +104,14 @@ export interface CreateThreadParams {
   id?: string;
   userId: string;
   title?: string;
-  modelSelection: ThreadModelSelection;
+  modelSelection: ModelSelection;
   /** Override the creation timestamp (ISO-8601). Useful in tests. */
   createdAt?: string;
 }
 
 export interface UpdateThreadSettingsParams {
   title?: string;
-  modelSelection?: ThreadModelSelection | null;
+  modelSelection?: ModelSelection | null;
   now?: string;
 }
 
@@ -117,7 +127,7 @@ export interface SaveThreadMessageParams {
   /** Persisted verbatim as a UI-layer message; convert to model messages at call time. */
   message: UIMessage;
   /** Used by the pricing calculator and to track what model was used for the message. */
-  modelSelection: ThreadModelSelection;
+  modelSelection: ModelSelection;
   usage: {
     inputTokens: number;
     outputTokens: number;
@@ -177,16 +187,7 @@ export interface AgentMemory {
   listThreads(params?: {
     includeDeleted?: boolean;
     userId?: string;
-  }): Promise<ThreadRecord[]>;
-  // saveMessage(
-  //   threadId: string,
-  //   payload: SaveThreadMessageParams,
-  // ): Promise<ThreadRecord | null>;
-  /**
-   * Inserts a new message or updates an existing one matched by `message.id`.
-   * On update: refreshes message content, usage, and bumps the version.
-   * On insert: behaves identically to `saveMessage`.
-   */
+  }): Promise<ThreadRecordTrimmed[]>;
   upsertMessage(
     threadId: string,
     payload: SaveThreadMessageParams,

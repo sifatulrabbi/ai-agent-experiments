@@ -5,20 +5,24 @@ import type { FileEntry, FS } from "@protean/vfs";
 
 import { createHistoryCompactor } from "./compaction";
 import { ThreadMemoryError } from "./errors";
-import type {
-  CompactThreadOptions,
-  CompactThreadResult,
-  CreateThreadParams,
-  ReplaceThreadMessagesParams,
-  SaveThreadMessageParams,
-  ThreadMessageRecord,
-  ThreadModelSelection,
-  ThreadPricingCalculator,
-  ThreadRecord,
-  AgentMemory,
-  UpdateThreadSettingsParams,
-  ThreadRecordTrimmed,
-  ThreadUsage,
+import {
+  modelSelectionSchema,
+  reasoningBudgets,
+  type ModelSelection,
+} from "@protean/model-catalog";
+import {
+  type CompactThreadOptions,
+  type CompactThreadResult,
+  type CreateThreadParams,
+  type ReplaceThreadMessagesParams,
+  type SaveThreadMessageParams,
+  type ThreadMessageRecord,
+  type ThreadPricingCalculator,
+  type ThreadRecord,
+  type AgentMemory,
+  type UpdateThreadSettingsParams,
+  type ThreadRecordTrimmed,
+  type ThreadUsage,
 } from "./types";
 import {
   aggregateContextSize,
@@ -54,11 +58,7 @@ const threadMessageRecordSchema = z.object({
   error: z.string().nullable(),
 });
 
-const threadModelSelectionSchema: z.ZodType<ThreadModelSelection> = z.object({
-  providerId: z.string().min(1),
-  modelId: z.string().min(1),
-  reasoningBudget: z.string().min(1),
-});
+export { modelSelectionSchema };
 
 const contextSizeSchema = z.object({
   totalInputTokens: z.number(),
@@ -71,7 +71,7 @@ const threadRecordSchema: z.ZodType<ThreadRecord> = z.object({
   id: threadIdSchema,
   userId: z.string().min(1),
   title: z.string().min(1),
-  modelSelection: threadModelSelectionSchema,
+  modelSelection: modelSelectionSchema,
   history: z.array(threadMessageRecordSchema),
   activeHistory: z.array(threadMessageRecordSchema),
   lastCompactionOrdinal: z.number().int().min(1).nullable(),
@@ -391,7 +391,7 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
   async function listThreads(params?: {
     includeDeleted?: boolean;
     userId?: string;
-  }): Promise<ThreadRecord[]> {
+  }): Promise<ThreadRecordTrimmed[]> {
     await waitForPendingWrites();
 
     let entries: FileEntry[];
@@ -422,74 +422,9 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
     return threads
       .filter((thread) => includeDeleted || thread.deletedAt === null)
       .filter((thread) => (userId ? thread.userId === userId : true))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map(({ history, activeHistory, ...trimmedThread }) => trimmedThread);
   }
-
-  // /**
-  //  * Appends a new message record to both `history` and `activeHistory`,
-  //  * then recalculates usage and context-size totals.
-  //  *
-  //  * The `ordinal` for the new record is derived from the last entry in
-  //  * `history` + 1, ensuring it is always strictly increasing.
-  //  *
-  //  * Returns `null` if the thread does not exist.
-  //  */
-  // async function saveMessage(
-  //   threadId: string,
-  //   payload: SaveThreadMessageParams,
-  // ): Promise<ThreadRecord | null> {
-  //   const now = payload.updatedAt ?? new Date().toISOString();
-  //
-  //   return withLock(async () => {
-  //     const thread = await readThread(threadId);
-  //
-  //     if (!thread) {
-  //       return null;
-  //     }
-  //
-  //     const nextOrdinal =
-  //       thread.history.length > 0
-  //         ? (thread.history[thread.history.length - 1]?.ordinal ?? 0) + 1
-  //         : 1;
-  //
-  //     const usage = {
-  //       inputTokens: payload.usage.inputTokens,
-  //       outputTokens: payload.usage.outputTokens,
-  //       totalDurationMs: payload.usage.totalDurationMs,
-  //       totalCostUsd: resolveMessageCost({
-  //         inputTokens: payload.usage.inputTokens,
-  //         outputTokens: payload.usage.outputTokens,
-  //         explicitCostUsd: payload.usage.totalCostUsd,
-  //         modelId: payload.modelSelection.modelId,
-  //         pricingCalculator,
-  //       }),
-  //     };
-  //
-  //     const messageRecord: ThreadMessageRecord = {
-  //       id: payload.id ?? randomUUID(),
-  //       ordinal: nextOrdinal,
-  //       version: 1,
-  //       message: payload.message,
-  //       usage,
-  //       createdAt: payload.createdAt ?? now,
-  //       updatedAt: now,
-  //       deletedAt: null,
-  //       error: payload.error ?? null,
-  //     };
-  //
-  //     const updatedThread: ThreadRecord = {
-  //       ...thread,
-  //       history: [...thread.history, messageRecord],
-  //       activeHistory: [...thread.activeHistory, messageRecord],
-  //       updatedAt: now,
-  //     };
-  //
-  //     const withUsageAndContext = recalculateUsageAndContext(updatedThread);
-  //     await writeThread(withUsageAndContext);
-  //
-  //     return withUsageAndContext;
-  //   });
-  // }
 
   /**
    * Inserts a new message or updates an existing one matched by `message.id`.
@@ -729,12 +664,6 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
     });
   }
 
-  /**
-   * Delegates to {@link HistoryCompactor.compactIfNeeded} and persists the
-   * result only when an actual compaction occurred (`didCompact: true`).
-   *
-   * Returns `null` if the thread does not exist.
-   */
   async function compactIfNeeded(
     threadId: string,
     options: CompactThreadOptions,

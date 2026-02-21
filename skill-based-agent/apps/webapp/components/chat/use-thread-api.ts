@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback } from "react";
-import type { ThreadModelSelection } from "@/lib/server/models/model-selection";
+import type { UIMessage } from "ai";
+import type { ModelSelection } from "@protean/model-catalog";
 
 interface CreateThreadRequest {
-  modelSelection: ThreadModelSelection;
+  modelSelection: ModelSelection;
   initialUserMessage?: string;
   title?: string;
 }
@@ -22,7 +23,7 @@ export function useThreadApi() {
       initialUserMessage,
       title,
     }: CreateThreadRequest): Promise<string> => {
-      const response = await fetch("/agent/chats", {
+      const response = await fetch("/threads", {
         body: JSON.stringify({ initialUserMessage, modelSelection, title }),
         headers: {
           "Content-Type": "application/json",
@@ -43,9 +44,9 @@ export function useThreadApi() {
   const updateThreadModelSelection = useCallback(
     async (args: {
       threadId: string;
-      modelSelection: ThreadModelSelection;
+      modelSelection: ModelSelection;
     }): Promise<void> => {
-      await fetch(`/agent/chats/${args.threadId}`, {
+      await fetch(`/threads/${args.threadId}`, {
         body: JSON.stringify({ modelSelection: args.modelSelection }),
         headers: {
           "Content-Type": "application/json",
@@ -58,7 +59,7 @@ export function useThreadApi() {
 
   const deleteThread = useCallback(
     async (threadId: string): Promise<boolean> => {
-      const response = await fetch(`/agent/chats/${threadId}`, {
+      const response = await fetch(`/threads/${threadId}`, {
         method: "DELETE",
       });
 
@@ -67,9 +68,59 @@ export function useThreadApi() {
     [],
   );
 
+  const addMessage = useCallback(
+    async (args: {
+      threadId: string;
+      message: UIMessage;
+      modelSelection?: ModelSelection;
+    }): Promise<void> => {
+      const response = await fetch(`/threads/${args.threadId}/messages`, {
+        body: JSON.stringify({
+          message: args.message,
+          modelSelection: args.modelSelection,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to add message");
+      }
+    },
+    [],
+  );
+
+  const editMessage = useCallback(
+    async (args: {
+      threadId: string;
+      messageId: string;
+      message: UIMessage;
+    }): Promise<void> => {
+      const response = await fetch(
+        `/threads/${args.threadId}/messages/${args.messageId}`,
+        {
+          body: JSON.stringify({ message: args.message }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          method: "PATCH",
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Unable to edit message");
+      }
+    },
+    [],
+  );
+
   return {
+    addMessage,
     createThread,
     deleteThread,
+    editMessage,
     updateThreadModelSelection,
   };
 }

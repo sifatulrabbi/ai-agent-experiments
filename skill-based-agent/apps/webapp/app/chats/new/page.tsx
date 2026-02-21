@@ -2,7 +2,7 @@ import { ThreadRouteContent } from "@/components/chat/thread-route-content";
 import {
   getDefaultModelSelection,
   getModelCatalog,
-} from "@/lib/server/models/model-catalog";
+} from "@protean/model-catalog";
 
 export default function NewChatPage() {
   const providers = getModelCatalog();

@@ -5,34 +5,15 @@ import { useRouter } from "next/navigation";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { useShallow } from "zustand/react/shallow";
+import type { ModelSelection } from "@protean/model-catalog";
 import {
   getModelReasoningById,
-  resolveModelSelection,
-  type ModelSelectionLike,
+  resolveClientModelSelection,
   type AIModelProviderEntry,
-} from "@/components/chat/model-catalog";
+} from "@protean/model-catalog";
 import { useThreadApi } from "@/components/chat/use-thread-api";
 import { useThreadUiStore } from "@/components/chat/thread-ui-store";
 import type { ThreadStatus } from "@/components/chat/thread-ui-shared";
-import type { ThreadModelSelection } from "@/lib/server/models/model-selection";
-
-function toModelSelectionLike(
-  selection: ThreadModelSelection,
-): ModelSelectionLike {
-  const budget =
-    selection.reasoningBudget === "none" ||
-    selection.reasoningBudget === "low" ||
-    selection.reasoningBudget === "medium" ||
-    selection.reasoningBudget === "high"
-      ? selection.reasoningBudget
-      : "medium";
-
-  return {
-    providerId: selection.providerId,
-    modelId: selection.modelId,
-    reasoningBudget: budget,
-  };
-}
 
 function isPendingMessage(message: UIMessage): boolean {
   const metadata = (
@@ -49,39 +30,33 @@ function isPendingMessage(message: UIMessage): boolean {
 }
 
 interface UseThreadChatArgs {
-  defaultModelSelection: ThreadModelSelection;
+  defaultModelSelection: ModelSelection;
   initialMessages: UIMessage[];
-  initialModelSelection?: ThreadModelSelection;
+  initialModelSelection?: ModelSelection;
   initialThreadId?: string;
   providers: AIModelProviderEntry[];
 }
 
-interface UseThreadChatResult {
+export interface UseThreadChatResult {
   activeThreadId: string | null;
   error: Error | undefined;
   handleEditUserMessage: (payload: {
     messageId: string;
-    modelSelection?: { modelId: string; providerId: string };
-    reasoningBudget?: string;
+    modelSelection?: ModelSelection;
     text: string;
   }) => Promise<void>;
-  handleModelChange: (selection: {
-    modelId: string;
-    providerId: string;
-  }) => void;
+  handleModelChange: (selection: ModelSelection) => void;
   handleRerunAssistantMessage: (payload: {
     messageId: string;
-    modelSelection?: { modelId: string; providerId: string };
+    modelSelection?: ModelSelection;
   }) => Promise<void>;
   handleSubmit: (payload: { text: string }) => Promise<void>;
-  handleThinkingBudgetChange: (budget: string) => void;
+  handleReasoningBudgetChange: (budget: string) => void;
   isCreatingThread: boolean;
   messages: UIMessage[];
-  selectedModelId: string;
-  selectedProviderId: string;
+  modelSelection: ModelSelection;
   status: ThreadStatus;
   stop: () => void;
-  thinkingBudget: string;
 }
 
 export function useThreadChat({
@@ -92,34 +67,27 @@ export function useThreadChat({
   providers,
 }: UseThreadChatArgs): UseThreadChatResult {
   const router = useRouter();
-  const { createThread, updateThreadModelSelection } = useThreadApi();
+  const { addMessage, createThread, editMessage, updateThreadModelSelection } =
+    useThreadApi();
 
   const {
     activeThreadId,
-    hydrateFromRoute,
     isCreatingThread,
-    selectedModelId,
-    selectedProviderId,
-    thinkingBudget,
+    modelSelection: storeModelSelection,
   } = useThreadUiStore(
     useShallow((state) => ({
       activeThreadId: state.activeThreadId,
-      hydrateFromRoute: state.hydrateFromRoute,
       isCreatingThread: state.isCreatingThread,
-      selectedModelId: state.selectedModelId,
-      selectedProviderId: state.selectedProviderId,
-      thinkingBudget: state.thinkingBudget,
+      modelSelection: state.modelSelection,
     })),
   );
 
   const initialSelection = useMemo(
     () =>
-      resolveModelSelection(
+      resolveClientModelSelection(
         providers,
-        toModelSelectionLike(defaultModelSelection),
-        initialModelSelection
-          ? toModelSelectionLike(initialModelSelection)
-          : undefined,
+        defaultModelSelection,
+        initialModelSelection,
       ),
     [defaultModelSelection, initialModelSelection, providers],
   );
@@ -127,42 +95,20 @@ export function useThreadChat({
   const threadIdRef = useRef<string | null>(initialThreadId ?? null);
 
   useEffect(() => {
-    hydrateFromRoute({
-      modelId: initialSelection.modelId,
-      providerId: initialSelection.providerId,
-      reasoningBudget: initialSelection.reasoningBudget,
+    useThreadUiStore.getState().hydrateFromRoute({
+      modelSelection: initialSelection,
       threadId: initialThreadId ?? null,
     });
 
     threadIdRef.current = initialThreadId ?? null;
-  }, [hydrateFromRoute, initialSelection, initialThreadId]);
-
-  const selectedProviderRef = useRef(initialSelection.providerId);
-  const selectedModelRef = useRef(initialSelection.modelId);
-  const thinkingBudgetRef = useRef(initialSelection.reasoningBudget);
-
-  useEffect(() => {
-    if (selectedProviderId) {
-      selectedProviderRef.current = selectedProviderId;
-    }
-  }, [selectedProviderId]);
-
-  useEffect(() => {
-    if (selectedModelId) {
-      selectedModelRef.current = selectedModelId;
-    }
-  }, [selectedModelId]);
-
-  useEffect(() => {
-    thinkingBudgetRef.current = thinkingBudget;
-  }, [thinkingBudget]);
+  }, [initialSelection, initialThreadId]);
 
   const refreshSidebar = useCallback(() => {
     router.refresh();
   }, [router]);
 
   const persistThreadModelSelection = useCallback(
-    async (selection: ModelSelectionLike) => {
+    async (selection: ModelSelection) => {
       const threadId = threadIdRef.current;
       if (!threadId) {
         return;
@@ -176,78 +122,36 @@ export function useThreadChat({
     [updateThreadModelSelection],
   );
 
-  const resolveInvocationModelSelection = useCallback(
-    (args?: {
-      modelSelection?: { modelId: string; providerId: string };
-      reasoningBudget?: string;
-    }): ModelSelectionLike | undefined => {
-      const hasModelOverride = Boolean(args?.modelSelection);
-      const hasBudgetOverride = Boolean(args?.reasoningBudget);
-
-      if (!hasModelOverride && !hasBudgetOverride) {
-        return undefined;
-      }
-
-      return resolveModelSelection(
-        providers,
-        {
-          modelId: selectedModelRef.current,
-          providerId: selectedProviderRef.current,
-          reasoningBudget: thinkingBudgetRef.current,
-        },
-        {
-          modelId: args?.modelSelection?.modelId,
-          providerId: args?.modelSelection?.providerId,
-          reasoningBudget: args?.reasoningBudget,
-        },
-      );
-    },
-    [providers],
-  );
-
   const applyInvocationModelSelection = useCallback(
-    async (args?: {
-      modelSelection?: { modelId: string; providerId: string };
-      reasoningBudget?: string;
-    }): Promise<ModelSelectionLike | undefined> => {
-      const resolvedSelection = resolveInvocationModelSelection(args);
-
-      if (!resolvedSelection) {
+    async (
+      overrideSelection?: ModelSelection,
+    ): Promise<ModelSelection | undefined> => {
+      if (!overrideSelection) {
         return undefined;
       }
 
-      selectedProviderRef.current = resolvedSelection.providerId;
-      selectedModelRef.current = resolvedSelection.modelId;
-      thinkingBudgetRef.current = resolvedSelection.reasoningBudget;
+      const resolved = resolveClientModelSelection(
+        providers,
+        useThreadUiStore.getState().modelSelection,
+        overrideSelection,
+      );
 
-      useThreadUiStore.getState().setModelSelection({
-        modelId: resolvedSelection.modelId,
-        providerId: resolvedSelection.providerId,
-        thinkingBudget: resolvedSelection.reasoningBudget,
-      });
+      useThreadUiStore.getState().setModelSelection(resolved);
+      await persistThreadModelSelection(resolved);
 
-      await persistThreadModelSelection(resolvedSelection);
-
-      return resolvedSelection;
+      return resolved;
     },
-    [persistThreadModelSelection, resolveInvocationModelSelection],
+    [persistThreadModelSelection, providers],
   );
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport<UIMessage>({
         api: "/agent/chat",
-        prepareSendMessagesRequest: ({
-          api,
-          body,
-          id,
-          messageId,
-          messages,
-          trigger,
-        }) => {
+        prepareSendMessagesRequest: ({ api, body, id, trigger }) => {
           const bodyAsRecord = body as Record<string, unknown> | undefined;
           const modelSelectionFromBody = bodyAsRecord?.modelSelection as
-            | ThreadModelSelection
+            | ModelSelection
             | undefined;
 
           return {
@@ -255,13 +159,9 @@ export function useThreadChat({
             body: {
               ...body,
               id,
-              messageId,
-              messages,
-              modelSelection: modelSelectionFromBody ?? {
-                modelId: selectedModelRef.current,
-                providerId: selectedProviderRef.current,
-                reasoningBudget: thinkingBudgetRef.current,
-              },
+              modelSelection:
+                modelSelectionFromBody ??
+                useThreadUiStore.getState().modelSelection,
               threadId: threadIdRef.current,
               trigger,
             },
@@ -312,15 +212,9 @@ export function useThreadChat({
         store.setIsCreatingThread(true);
 
         try {
-          const modelSelection: ThreadModelSelection = {
-            modelId: selectedModelRef.current,
-            providerId: selectedProviderRef.current,
-            reasoningBudget: thinkingBudgetRef.current,
-          };
-
           const threadId = await createThread({
             initialUserMessage: trimmedText,
-            modelSelection,
+            modelSelection: store.modelSelection,
             title: trimmedText.slice(0, 60),
           });
 
@@ -335,22 +229,32 @@ export function useThreadChat({
         }
       }
 
+      const userMessage: UIMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        parts: [{ type: "text", text: trimmedText }],
+      };
+
+      await addMessage({
+        threadId: threadIdRef.current,
+        message: userMessage,
+        modelSelection: useThreadUiStore.getState().modelSelection,
+      });
+
       await sendMessage({ text: trimmedText });
       refreshSidebar();
     },
-    [createThread, refreshSidebar, router, sendMessage],
+    [addMessage, createThread, refreshSidebar, router, sendMessage],
   );
 
   const handleEditUserMessage = useCallback(
     async ({
       messageId,
       modelSelection,
-      reasoningBudget,
       text,
     }: {
       messageId: string;
-      modelSelection?: { modelId: string; providerId: string };
-      reasoningBudget?: string;
+      modelSelection?: ModelSelection;
       text: string;
     }) => {
       const trimmedText = text.trim();
@@ -358,9 +262,24 @@ export function useThreadChat({
         return;
       }
 
-      const invocationModelSelection = await applyInvocationModelSelection({
-        modelSelection,
-        reasoningBudget,
+      const threadId = threadIdRef.current;
+      if (!threadId) {
+        return;
+      }
+
+      const invocationModelSelection =
+        await applyInvocationModelSelection(modelSelection);
+
+      const editedMessage: UIMessage = {
+        id: messageId,
+        role: "user",
+        parts: [{ type: "text", text: trimmedText }],
+      };
+
+      await editMessage({
+        threadId,
+        messageId,
+        message: editedMessage,
       });
 
       await sendMessage(
@@ -378,7 +297,7 @@ export function useThreadChat({
       );
       refreshSidebar();
     },
-    [applyInvocationModelSelection, refreshSidebar, sendMessage],
+    [applyInvocationModelSelection, editMessage, refreshSidebar, sendMessage],
   );
 
   const handleRerunAssistantMessage = useCallback(
@@ -387,11 +306,10 @@ export function useThreadChat({
       modelSelection,
     }: {
       messageId: string;
-      modelSelection?: { modelId: string; providerId: string };
+      modelSelection?: ModelSelection;
     }) => {
-      const invocationModelSelection = await applyInvocationModelSelection({
-        modelSelection,
-      });
+      const invocationModelSelection =
+        await applyInvocationModelSelection(modelSelection);
 
       await regenerate({
         ...(invocationModelSelection
@@ -409,52 +327,56 @@ export function useThreadChat({
   );
 
   const handleModelChange = useCallback(
-    ({ modelId, providerId }: { modelId: string; providerId: string }) => {
-      const reasoning = getModelReasoningById(providers, providerId, modelId);
-      const nextBudget = reasoning?.defaultValue ?? "none";
+    (selection: ModelSelection) => {
+      const reasoning = getModelReasoningById(
+        providers,
+        selection.providerId,
+        selection.modelId,
+      );
+      const resolved: ModelSelection = {
+        ...selection,
+        reasoningBudget:
+          (reasoning?.defaultValue as ModelSelection["reasoningBudget"]) ??
+          "none",
+      };
 
-      useThreadUiStore.getState().setModelSelection({
-        modelId,
-        providerId,
-        thinkingBudget: nextBudget,
-      });
-
-      void persistThreadModelSelection({
-        modelId,
-        providerId,
-        reasoningBudget: nextBudget,
-      });
+      useThreadUiStore.getState().setModelSelection(resolved);
+      void persistThreadModelSelection(resolved);
     },
     [persistThreadModelSelection, providers],
   );
 
-  const handleThinkingBudgetChange = useCallback(
+  const handleReasoningBudgetChange = useCallback(
     (budget: string) => {
-      useThreadUiStore.getState().setThinkingBudget(budget);
+      const current = useThreadUiStore.getState().modelSelection;
+      const updated: ModelSelection = {
+        ...current,
+        reasoningBudget: budget as ModelSelection["reasoningBudget"],
+      };
 
-      void persistThreadModelSelection({
-        modelId: selectedModelRef.current,
-        providerId: selectedProviderRef.current,
-        reasoningBudget: budget,
-      });
+      useThreadUiStore.getState().setModelSelection(updated);
+      void persistThreadModelSelection(updated);
     },
     [persistThreadModelSelection],
   );
+
+  // Use store values if hydrated, otherwise fall back to initial selection
+  const effectiveModelSelection = storeModelSelection.modelId
+    ? storeModelSelection
+    : initialSelection;
 
   return {
     activeThreadId,
     error: error as Error | undefined,
     isCreatingThread,
     messages,
-    selectedModelId: selectedModelId || initialSelection.modelId,
-    selectedProviderId: selectedProviderId || initialSelection.providerId,
+    modelSelection: effectiveModelSelection,
     status,
-    thinkingBudget: thinkingBudget || initialSelection.reasoningBudget,
     handleEditUserMessage,
     handleModelChange,
     handleRerunAssistantMessage,
     handleSubmit,
-    handleThinkingBudgetChange,
+    handleReasoningBudgetChange,
     stop,
   };
 }

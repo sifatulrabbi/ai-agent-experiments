@@ -6,9 +6,13 @@ import { tmpdir } from "node:os";
 import type { UIMessage } from "ai";
 import { createLocalFs, type FS } from "@protean/vfs";
 
-import { createFsMemory, type ThreadPricingCalculator } from "../index";
+import {
+  createFsMemory,
+  type ModelSelection,
+  type ThreadPricingCalculator,
+} from "../index";
 
-const defaultModelSelection = {
+const defaultModelSelection: ModelSelection = {
   providerId: "openrouter",
   modelId: "moonshotai/kimi-k2.5",
   reasoningBudget: "medium",

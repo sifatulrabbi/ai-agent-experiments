@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { UIMessage } from "ai";
+import {
+  resolveModelSelection,
+  parseModelSelection,
+} from "@protean/model-catalog";
+import type { ThreadRecord } from "@protean/agent-memory";
+
 import { requireUserId } from "@/lib/server/auth-user";
 import { getAgentMemory } from "@/lib/server/agent-memory";
-import {
-  normalizeThreadModelSelection,
-  parseStrictModelSelection,
-} from "@/lib/server/models/model-selection";
 
 export async function GET() {
   const userId = await requireUserId();
@@ -38,9 +40,9 @@ export async function POST(request: Request) {
       ? body.initialUserMessage.trim()
       : undefined;
 
-  const modelSelection = normalizeThreadModelSelection(
-    parseStrictModelSelection(body?.modelSelection),
-  );
+  const modelSelection = resolveModelSelection({
+    request: parseModelSelection(body?.modelSelection),
+  });
 
   const messages: UIMessage[] = initialUserMessage
     ? [
@@ -54,14 +56,20 @@ export async function POST(request: Request) {
     : [];
 
   const memory = await getAgentMemory();
-  const thread = await memory.createThread({
+  let thread: ThreadRecord | null = await memory.createThread({
     userId,
     title: title?.trim() || "New chat",
     modelSelection,
   });
 
   if (messages.length > 0) {
-    await memory.replaceMessages(thread.id, { messages });
+    thread = await memory.replaceMessages(thread.id, { messages });
+    if (!thread) {
+      return Response.json(
+        { message: "Unable to create thread." },
+        { status: 400 },
+      );
+    }
   }
 
   return Response.json({ thread }, { status: 201 });

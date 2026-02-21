@@ -14,7 +14,7 @@ export function DataToolsSection() {
     setIsExporting(true);
 
     try {
-      const response = await fetch("/agent/chats", { method: "GET" });
+      const response = await fetch("/threads", { method: "GET" });
 
       if (!response.ok) {
         setImportMessage("Unable to export data right now.");

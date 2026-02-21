@@ -1,11 +1,11 @@
 import { z } from "zod";
-import catalogJson from "./models.catalog.json";
+import catalogJson from "./data/models.catalog.json";
 import type {
   AIModelEntry,
   AIModelProviderEntry,
   RuntimeProvider,
-} from "@/components/chat/model-catalog";
-import type { ThreadModelSelection } from "@/lib/server/models/model-selection";
+} from "./catalog-types";
+import type { ModelSelection, ReasoningBudget } from "./types";
 
 const reasoningBudgetSchema = z.enum(["none", "low", "medium", "high"]);
 
@@ -241,15 +241,15 @@ const defaultModelSelection = (() => {
   return {
     providerId: provider.id,
     modelId: model.id,
-    reasoningBudget: model.reasoning.defaultValue,
-  } satisfies ThreadModelSelection;
+    reasoningBudget: model.reasoning.defaultValue as ReasoningBudget,
+  } satisfies ModelSelection;
 })();
 
 export function getModelCatalog(): AIModelProviderEntry[] {
   return providers;
 }
 
-export function getDefaultModelSelection(): ThreadModelSelection {
+export function getDefaultModelSelection(): ModelSelection {
   return defaultModelSelection;
 }
 

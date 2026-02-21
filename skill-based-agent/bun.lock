@@ -15,6 +15,7 @@
         "@openrouter/ai-sdk-provider": "^2.2.3",
         "@protean/agent-memory": "workspace:*",
         "@protean/logger": "workspace:*",
+        "@protean/model-catalog": "workspace:*",
         "@protean/protean": "workspace:*",
         "@protean/vfs": "workspace:*",
         "@radix-ui/react-use-controllable-state": "^1.2.2",
@@ -69,6 +70,7 @@
     "packages/agent-memory": {
       "name": "@protean/agent-memory",
       "dependencies": {
+        "@protean/model-catalog": "workspace:*",
         "@protean/vfs": "workspace:*",
         "ai": "^6.0.78",
         "zod": "^4.3.6",
@@ -107,6 +109,17 @@
         "typescript": "^5.9.3",
       },
     },
+    "packages/model-catalog": {
+      "name": "@protean/model-catalog",
+      "dependencies": {
+        "zod": "^4.3.6",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.3.9",
+        "@types/node": "^25.2.3",
+        "typescript": "^5.9.3",
+      },
+    },
     "packages/pptx-skill": {
       "name": "@protean/pptx-skill",
       "dependencies": {
@@ -130,6 +143,7 @@
         "@protean/agent-memory": "workspace:*",
         "@protean/docx-skill": "workspace:*",
         "@protean/logger": "workspace:*",
+        "@protean/model-catalog": "workspace:*",
         "@protean/pptx-skill": "workspace:*",
         "@protean/research-skill": "workspace:*",
         "@protean/skill": "workspace:*",
@@ -697,6 +711,8 @@
     "@protean/docx-skill": ["@protean/docx-skill@workspace:packages/docx-skill"],
 
     "@protean/logger": ["@protean/logger@workspace:packages/logger"],
+
+    "@protean/model-catalog": ["@protean/model-catalog@workspace:packages/model-catalog"],
 
     "@protean/pptx-skill": ["@protean/pptx-skill@workspace:packages/pptx-skill"],
 

@@ -12,29 +12,29 @@ import assert from "node:assert";
 
 export interface OrchestratorConfig {
   model: LanguageModel;
-  skillsRegistry: Skill<unknown>[];
+  skillsList: Skill<unknown>[];
   instructionsBuilder: (cfg: {
     skillFrontmatters: { id: string; frontmatter: string }[];
   }) => string;
-  tools?: { [k: string]: Tool };
+  baseTools?: { [k: string]: Tool };
   agentId?: string;
 }
 
-export async function createOrchestration(
+export async function createSkillOrchestrator(
   cfg: OrchestratorConfig,
   logger: Logger,
 ): Promise<ToolLoopAgent> {
   const skillsRegistry = new Map(
-    cfg.skillsRegistry.map((skill) => [skill.id, skill]),
+    cfg.skillsList.map((skill) => [skill.id, skill]),
   );
   const activeSkillIds = new Set<string>();
   const allTools: { [k: string]: Tool } = {};
   const alwaysActiveTools: string[] = [];
 
-  if (cfg.tools) {
-    Object.keys(cfg.tools).forEach((toolName) => {
-      assert(cfg.tools, "cfg.tools should be defined");
-      allTools[toolName] = cfg.tools[toolName];
+  if (cfg.baseTools) {
+    Object.keys(cfg.baseTools).forEach((toolName) => {
+      assert(cfg.baseTools, "cfg.tools should be defined");
+      allTools[toolName] = cfg.baseTools[toolName];
       alwaysActiveTools.push(toolName);
     });
   }
@@ -103,7 +103,7 @@ export async function createOrchestration(
     id: cfg.agentId || undefined,
     model: cfg.model,
     instructions: cfg.instructionsBuilder({
-      skillFrontmatters: cfg.skillsRegistry.map(({ id, frontmatter }) => ({
+      skillFrontmatters: cfg.skillsList.map(({ id, frontmatter }) => ({
         id,
         frontmatter,
       })),
