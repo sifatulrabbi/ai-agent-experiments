@@ -66,7 +66,8 @@ export function ThreadPromptInput() {
     stop: onStop,
   } = useThreadChatContext();
   const providers = useModelCatalog();
-  const disabled = isCreatingThread;
+  const disabled =
+    isCreatingThread || status === "streaming" || status === "submitted";
   const isDeepResearchEnabled = useThreadUiStore(
     (state) => state.deepResearchEnabled,
   );

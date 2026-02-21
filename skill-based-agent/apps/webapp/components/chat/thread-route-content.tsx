@@ -44,6 +44,7 @@ export function ThreadRouteContent({
         providers={providers}
       >
         <SidebarProvider
+          className="!min-h-0 h-full"
           defaultOpen={true}
           style={{ "--sidebar-width": "20rem" } as React.CSSProperties}
         >
