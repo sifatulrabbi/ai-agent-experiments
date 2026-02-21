@@ -2,7 +2,7 @@ import { convertToModelMessages, type UIMessage } from "ai";
 import { createRootAgent } from "@protean/protean";
 import type { ThreadMessageRecord } from "@protean/agent-memory";
 import { consoleLogger } from "@protean/logger";
-import { createLocalFs } from "@protean/vfs";
+import { createRemoteFs } from "@protean/vfs";
 import {
   findModel,
   isSameModelSelection,
@@ -105,11 +105,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }
 
-  // INFO: Keep it as is, do not change the path or remove this.
-  const fs = await createLocalFs(
-    `/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project/${userId}`,
-    consoleLogger,
-  );
+  const fs = createRemoteFs({
+    baseUrl: process.env.VFS_SERVER_URL!,
+    serviceToken: process.env.VFS_SERVICE_TOKEN!,
+    userId,
+    logger: consoleLogger,
+  });
 
   // For making sure the model selection and the reasoning budget are valid.
   const requestSelection = parseModelSelection(parsedBody.modelSelection);
@@ -216,6 +217,7 @@ export async function POST(request: Request) {
   const streamStartMs = Date.now();
   const stream = await agent.stream({
     messages: await convertToModelMessages(activeHistory),
+    abortSignal: request.signal,
   });
 
   return stream.toUIMessageStreamResponse({
