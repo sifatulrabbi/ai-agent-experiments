@@ -1,15 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeftIcon,
-  DownloadIcon,
   FileIcon,
   FolderIcon,
   RefreshCwIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Sidebar,
   SidebarContent,
@@ -19,17 +26,14 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarMenuAction,
 } from "@/components/ui/sidebar";
 import { FileViewerDialog } from "@/components/chat/file-viewer-dialog";
+import {
+  FileEntryContextMenu,
+  type FileEntry,
+} from "@/components/chat/file-entry-context-menu";
 
-interface FileEntry {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  size: number;
-  modified: string;
-}
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -46,14 +50,86 @@ function downloadFile(path: string, fileName: string) {
   document.body.removeChild(a);
 }
 
+async function deleteEntry(path: string): Promise<boolean> {
+  const res = await fetch(`/api/files/${encodeURIComponent(path)}`, {
+    method: "DELETE",
+  });
+  return res.ok;
+}
+
+// ─── Rename Dialog ────────────────────────────────────────────────────────────
+
+interface RenameDialogProps {
+  entry: FileEntry | null;
+  onConfirm: (newName: string) => void;
+  onCancel: () => void;
+}
+
+function RenameDialog({ entry, onConfirm, onCancel }: RenameDialogProps) {
+  const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (entry) {
+      setValue(entry.name);
+      // Select filename without extension for files
+      setTimeout(() => {
+        if (!inputRef.current) return;
+        inputRef.current.focus();
+        const dotIdx = entry.isDirectory ? -1 : entry.name.lastIndexOf(".");
+        inputRef.current.setSelectionRange(
+          0,
+          dotIdx > 0 ? dotIdx : entry.name.length,
+        );
+      }, 0);
+    }
+  }, [entry]);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== entry?.name) {
+      onConfirm(trimmed);
+    } else {
+      onCancel();
+    }
+  }
+
+  return (
+    <Dialog open={entry !== null} onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Rename</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit}>
+          <Input
+            ref={inputRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="mt-1"
+          />
+          <DialogFooter className="mt-4">
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!value.trim()}>
+              Rename
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main Panel ───────────────────────────────────────────────────────────────
+
 export function WorkspaceFilesPanel() {
   const [currentDir, setCurrentDir] = useState("/");
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [viewerFile, setViewerFile] = useState<{
-    name: string;
-    path: string;
-  } | null>(null);
+  const [viewerFile, setViewerFile] = useState<FileEntry | null>(null);
+  const [renameEntry, setRenameEntry] = useState<FileEntry | null>(null);
 
   const fetchEntries = useCallback(async (dir: string) => {
     setLoading(true);
@@ -82,6 +158,40 @@ export function WorkspaceFilesPanel() {
     parts.pop();
     setCurrentDir(parts.length > 0 ? parts.join("/") : "/");
   }, [currentDir]);
+
+  // ─── Action handlers ──────────────────────────────────────────────────────
+
+  function handleOpen(entry: FileEntry) {
+    if (entry.isDirectory) {
+      setCurrentDir(entry.path);
+    } else {
+      setViewerFile(entry);
+    }
+  }
+
+  function handleDownload(entry: FileEntry) {
+    downloadFile(entry.path, entry.name);
+  }
+
+  function handleAddToChat(_entry: FileEntry) {
+    // TODO: implement add-to-chat
+  }
+
+  async function handleDelete(entry: FileEntry) {
+    const ok = await deleteEntry(entry.path);
+    if (ok) fetchEntries(currentDir);
+  }
+
+  function handleRenameRequest(entry: FileEntry) {
+    setRenameEntry(entry);
+  }
+
+  async function handleRenameConfirm(newName: string) {
+    if (!renameEntry) return;
+    const ok = await renameEntryApi(renameEntry.path, newName);
+    setRenameEntry(null);
+    if (ok) fetchEntries(currentDir);
+  }
 
   return (
     <>
@@ -134,37 +244,28 @@ export function WorkspaceFilesPanel() {
                 <SidebarMenu>
                   {entries.map((entry) => (
                     <SidebarMenuItem key={entry.path}>
-                      <SidebarMenuButton
-                        onClick={() =>
-                          entry.isDirectory
-                            ? setCurrentDir(entry.path)
-                            : setViewerFile({
-                                name: entry.name,
-                                path: entry.path,
-                              })
-                        }
+                      <FileEntryContextMenu
+                        entry={entry}
+                        onOpen={handleOpen}
+                        onDownload={handleDownload}
+                        onAddToChat={handleAddToChat}
+                        onDelete={handleDelete}
+                        onRename={handleRenameRequest}
                       >
-                        {entry.isDirectory ? (
-                          <FolderIcon className="size-4" />
-                        ) : (
-                          <FileIcon className="size-4" />
-                        )}
-                        <span className="truncate">{entry.name}</span>
-                        {!entry.isDirectory && (
-                          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                            {formatBytes(entry.size)}
-                          </span>
-                        )}
-                      </SidebarMenuButton>
-
-                      {!entry.isDirectory && (
-                        <SidebarMenuAction
-                          onClick={() => downloadFile(entry.path, entry.name)}
-                        >
-                          <DownloadIcon className="size-3.5" />
-                          <span className="sr-only">Download {entry.name}</span>
-                        </SidebarMenuAction>
-                      )}
+                        <SidebarMenuButton onClick={() => handleOpen(entry)}>
+                          {entry.isDirectory ? (
+                            <FolderIcon className="size-4" />
+                          ) : (
+                            <FileIcon className="size-4" />
+                          )}
+                          <span className="truncate">{entry.name}</span>
+                          {!entry.isDirectory && (
+                            <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                              {formatBytes(entry.size)}
+                            </span>
+                          )}
+                        </SidebarMenuButton>
+                      </FileEntryContextMenu>
                     </SidebarMenuItem>
                   ))}
                 </SidebarMenu>
@@ -176,12 +277,25 @@ export function WorkspaceFilesPanel() {
 
       <FileViewerDialog
         open={viewerFile !== null}
-        onOpenChange={(open) => {
-          if (!open) setViewerFile(null);
-        }}
+        onOpenChange={(open) => !open && setViewerFile(null)}
         fileName={viewerFile?.name ?? ""}
         filePath={viewerFile?.path ?? ""}
       />
+
+      <RenameDialog
+        entry={renameEntry}
+        onConfirm={handleRenameConfirm}
+        onCancel={() => setRenameEntry(null)}
+      />
     </>
   );
+}
+
+async function renameEntryApi(path: string, newName: string): Promise<boolean> {
+  const res = await fetch(`/api/files/${encodeURIComponent(path)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newName }),
+  });
+  return res.ok;
 }

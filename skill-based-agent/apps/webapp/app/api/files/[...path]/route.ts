@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUserId } from "@/lib/server/auth-user";
 import { resolveWithinRoot } from "@protean/vfs";
-import { readFile, stat } from "fs/promises";
+import { readFile, stat, rm, rename } from "fs/promises";
+import { join, dirname } from "path";
 
 const WORKSPACE_BASE =
   "/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project";
@@ -80,5 +81,90 @@ export async function GET(
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
     return NextResponse.json({ error: "Failed to read file" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  const userId = await requireUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { path: pathSegments } = await params;
+  const filePath = decodeURIComponent(pathSegments.join("/"));
+  const workspaceRoot = `${WORKSPACE_BASE}/${userId}`;
+
+  let resolvedPath: string;
+  try {
+    resolvedPath = resolveWithinRoot(workspaceRoot, filePath);
+  } catch {
+    return NextResponse.json({ error: "Path not allowed" }, { status: 403 });
+  }
+
+  try {
+    await rm(resolvedPath, { recursive: true, force: false });
+    return NextResponse.json({ deleted: true });
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      return NextResponse.json({ error: "File not found" }, { status: 404 });
+    }
+    return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  const userId = await requireUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { path: pathSegments } = await params;
+  const filePath = decodeURIComponent(pathSegments.join("/"));
+  const workspaceRoot = `${WORKSPACE_BASE}/${userId}`;
+
+  let resolvedPath: string;
+  try {
+    resolvedPath = resolveWithinRoot(workspaceRoot, filePath);
+  } catch {
+    return NextResponse.json({ error: "Path not allowed" }, { status: 403 });
+  }
+
+  let newName: string;
+  try {
+    const body = await request.json();
+    newName = String(body.newName ?? "").trim();
+    if (!newName || newName.includes("/") || newName.includes("\\")) {
+      return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+    }
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
+  }
+
+  const newPath = join(dirname(resolvedPath), newName);
+  try {
+    resolveWithinRoot(workspaceRoot, newPath);
+  } catch {
+    return NextResponse.json({ error: "Path not allowed" }, { status: 403 });
+  }
+
+  try {
+    await rename(resolvedPath, newPath);
+    return NextResponse.json({ renamed: true, newName });
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      return NextResponse.json({ error: "File not found" }, { status: 404 });
+    }
+    return NextResponse.json({ error: "Failed to rename" }, { status: 500 });
   }
 }

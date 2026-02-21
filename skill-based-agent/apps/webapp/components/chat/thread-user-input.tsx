@@ -114,7 +114,10 @@ export function ThreadPromptInput() {
     <div className="sticky bottom-0 bg-background pt-2 pb-4">
       <PromptInput onSubmit={onSubmit}>
         <PromptInputBody>
-          <PromptInputTextarea placeholder="Ask anything..." />
+          <PromptInputTextarea
+            disabled={disabled}
+            placeholder="Ask anything..."
+          />
         </PromptInputBody>
 
         <PromptInputFooter>
