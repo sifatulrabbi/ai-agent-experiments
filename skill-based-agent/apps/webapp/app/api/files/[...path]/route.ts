@@ -63,7 +63,7 @@ export async function GET(
     const mimeType = getMimeType(filePath);
     const fileName = filePath.split("/").pop() ?? "file";
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": mimeType,
         "Content-Disposition": `inline; filename="${fileName}"`,
