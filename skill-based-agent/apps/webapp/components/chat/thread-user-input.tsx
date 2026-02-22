@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { getModelById } from "@protean/model-catalog";
 import { useModelCatalog } from "@/components/chat/model-catalog-provider";
-import { ModelProviderDropdown } from "@/components/chat/model-provider-dropdown";
+import { ModelSelectorDropdown } from "@/components/chat/model-selector-dropdown";
 import { useThreadChatContext } from "@/components/chat/thread-chat-provider";
 import {
   PromptInput,
@@ -152,7 +152,7 @@ export function ThreadPromptInput() {
               </PopoverContent>
             </Popover>
 
-            <ModelProviderDropdown
+            <ModelSelectorDropdown
               disabled={disabled}
               maxLabelLength={28}
               onChange={onModelChange}
