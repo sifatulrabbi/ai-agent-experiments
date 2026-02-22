@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckIcon, ChevronDownIcon, SparklesIcon } from "lucide-react";
+import { BrainIcon, CheckIcon, ChevronDownIcon, SparklesIcon, WrenchIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ModelSelector,
@@ -20,6 +20,27 @@ import {
 import type { ModelSelection } from "@protean/model-catalog";
 import { getModelReasoningById } from "@protean/model-catalog";
 import { useModelCatalog } from "@/components/chat/model-catalog-provider";
+
+const tokenFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 1,
+  notation: "compact",
+});
+
+const priceFormatter = new Intl.NumberFormat("en-US", {
+  currency: "USD",
+  maximumFractionDigits: 4,
+  minimumFractionDigits: 0,
+  style: "currency",
+});
+
+function formatTokens(value: number) {
+  return `${tokenFormatter.format(value)}`;
+}
+
+function formatPrice(value: number | null) {
+  if (value === null) return "N/A";
+  return `${priceFormatter.format(value)}/1M`;
+}
 
 interface ModelSelectorDropdownProps {
   disabled?: boolean;
@@ -121,7 +142,26 @@ export function ModelSelectorDropdown({
                       <ModelSelectorLogoGroup>
                         <ModelSelectorLogo provider={provider.id} />
                       </ModelSelectorLogoGroup>
-                      <ModelSelectorName>{model.name}</ModelSelectorName>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <ModelSelectorName>{model.name}</ModelSelectorName>
+                          {model.features.tools && (
+                            <WrenchIcon
+                              aria-label="Supports tool use"
+                              className="size-3 shrink-0 text-muted-foreground/60"
+                            />
+                          )}
+                          {model.features.reasoning && (
+                            <BrainIcon
+                              aria-label="Supports reasoning"
+                              className="size-3 shrink-0 text-muted-foreground/60"
+                            />
+                          )}
+                        </div>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {`${formatTokens(model.contextLimits.total)} ctx · In ${formatPrice(model.pricing.inputUsdPerMillion)} · Out ${formatPrice(model.pricing.outputUsdPerMillion)}`}
+                        </p>
+                      </div>
                       {isSelected && (
                         <CheckIcon className="size-4 shrink-0 text-muted-foreground" />
                       )}

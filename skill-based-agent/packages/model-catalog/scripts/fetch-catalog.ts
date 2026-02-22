@@ -7,7 +7,13 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const outputPath = resolve(__dirname, "..", "openrouter-models.json");
+const outputPath = resolve(
+  __dirname,
+  "..",
+  "src",
+  "data",
+  "openrouter-models.json",
+);
 
 async function main() {
   console.log("Fetching models from OpenRouter...");

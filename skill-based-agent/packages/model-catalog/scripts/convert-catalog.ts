@@ -26,7 +26,13 @@ interface OpenRouterModel {
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const inputPath = resolve(__dirname, "..", "openrouter-models.json");
+const inputPath = resolve(
+  __dirname,
+  "..",
+  "src",
+  "data",
+  "openrouter-models.json",
+);
 const outputPath = resolve(
   __dirname,
   "..",
