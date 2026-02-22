@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUserId } from "@/lib/server/auth-user";
-import { resolveWithinRoot } from "@protean/vfs";
-import { readdir, stat } from "fs/promises";
-import { join } from "path";
-
-const WORKSPACE_BASE =
-  "/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project";
+import { createRemoteFs } from "@protean/vfs";
 
 export async function GET(request: NextRequest) {
   const userId = await requireUserId();
@@ -14,36 +9,33 @@ export async function GET(request: NextRequest) {
   }
 
   const dir = request.nextUrl.searchParams.get("dir") ?? "/";
-  const workspaceRoot = `${WORKSPACE_BASE}/${userId}`;
 
-  let resolvedDir: string;
-  try {
-    resolvedDir = resolveWithinRoot(workspaceRoot, dir);
-  } catch {
-    return NextResponse.json({ error: "Path not allowed" }, { status: 403 });
-  }
+  const fs = createRemoteFs({
+    baseUrl: process.env.VFS_SERVER_URL!,
+    serviceToken: process.env.VFS_SERVICE_TOKEN!,
+    userId,
+  });
 
   try {
-    const dirEntries = await readdir(resolvedDir, { withFileTypes: true });
+    const dirEntries = await fs.readdir(dir);
 
     const entries = await Promise.all(
       dirEntries.map(async (entry) => {
-        const entryPath = join(resolvedDir, entry.name);
         const relativePath = dir === "/" ? entry.name : `${dir}/${entry.name}`;
         try {
-          const entryStat = await stat(entryPath);
+          const entryStat = await fs.stat(relativePath);
           return {
             name: entry.name,
             path: relativePath,
-            isDirectory: entry.isDirectory(),
+            isDirectory: entry.isDirectory,
             size: entryStat.size,
-            modified: entryStat.mtime.toISOString(),
+            modified: entryStat.modified,
           };
         } catch {
           return {
             name: entry.name,
             path: relativePath,
-            isDirectory: entry.isDirectory(),
+            isDirectory: entry.isDirectory,
             size: 0,
             modified: new Date().toISOString(),
           };
@@ -65,8 +57,9 @@ export async function GET(request: NextRequest) {
       },
     );
   } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") {
+    const message =
+      err instanceof Error ? err.message : "Failed to list directory";
+    if (message.includes("NOT_FOUND") || message.includes("not found")) {
       return NextResponse.json({ entries: [], dir });
     }
     return NextResponse.json(

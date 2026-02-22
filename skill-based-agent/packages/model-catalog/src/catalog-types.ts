@@ -5,6 +5,10 @@ export interface AIModelEntry {
   name: string;
   providerId: string;
   runtimeProvider: RuntimeProvider;
+  features: {
+    reasoning: boolean;
+    tools: boolean;
+  };
   reasoning: {
     budgets: string[];
     defaultValue: string;

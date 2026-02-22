@@ -4,12 +4,9 @@ import { z } from "zod";
 import type { FileEntry, FS } from "@protean/vfs";
 
 import { createHistoryCompactor } from "./compaction";
+import { deriveActiveHistory } from "./derive-active-history";
 import { ThreadMemoryError } from "./errors";
-import {
-  modelSelectionSchema,
-  reasoningBudgets,
-  type ModelSelection,
-} from "@protean/model-catalog";
+import { modelSelectionSchema } from "@protean/model-catalog";
 import {
   type CompactThreadOptions,
   type CompactThreadResult,
@@ -59,11 +56,9 @@ const threadMessageRecordSchema = z.object({
 });
 
 export { modelSelectionSchema };
+export { deriveActiveHistory } from "./derive-active-history";
 
-const contextSizeSchema = z.object({
-  totalInputTokens: z.number(),
-  totalOutputTokens: z.number(),
-});
+const contextSizeSchema = z.number();
 
 const threadRecordSchema: z.ZodType<ThreadRecord> = z.object({
   schemaVersion: z.literal(THREAD_SCHEMA_VERSION),
@@ -73,7 +68,6 @@ const threadRecordSchema: z.ZodType<ThreadRecord> = z.object({
   title: z.string().min(1),
   modelSelection: modelSelectionSchema,
   history: z.array(threadMessageRecordSchema),
-  activeHistory: z.array(threadMessageRecordSchema),
   lastCompactionOrdinal: z.number().int().min(1).nullable(),
   contextSize: contextSizeSchema,
   usage: threadUsageSchema,
@@ -101,18 +95,6 @@ async function validateThreadRecord(
     if (!historyValidation.success) {
       return {
         error: `Invalid history UIMessage payload: ${historyValidation.error.message}`,
-      };
-    }
-  }
-
-  if (parsed.data.activeHistory.length > 0) {
-    const activeHistoryValidation = await safeValidateUIMessages({
-      messages: parsed.data.activeHistory.map((record) => record.message),
-    });
-
-    if (!activeHistoryValidation.success) {
-      return {
-        error: `Invalid activeHistory UIMessage payload: ${activeHistoryValidation.error.message}`,
       };
     }
   }
@@ -156,7 +138,7 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
     return {
       ...thread,
       usage: aggregateThreadUsage(thread.history),
-      contextSize: aggregateContextSize(thread.history),
+      contextSize: aggregateContextSize(deriveActiveHistory(thread)),
     };
   }
 
@@ -331,7 +313,6 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
       title: params.title?.trim() || "New chat",
       modelSelection: params.modelSelection,
       history: [],
-      activeHistory: [],
       lastCompactionOrdinal: null,
       contextSize: emptyContextSize(),
       usage: emptyUsage(),
@@ -365,7 +346,7 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
     const thread = await readThread(threadId);
     if (!thread) return null;
 
-    const { history, activeHistory, ...trimmed } = thread;
+    const { history, ...trimmed } = thread;
     return trimmed;
   }
 
@@ -423,7 +404,7 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
       .filter((thread) => includeDeleted || thread.deletedAt === null)
       .filter((thread) => (userId ? thread.userId === userId : true))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map(({ history, activeHistory, ...trimmedThread }) => trimmedThread);
+      .map(({ history, ...trimmedThread }) => trimmedThread);
   }
 
   /**
@@ -494,19 +475,9 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
         const nextHistory = [...thread.history];
         nextHistory[existingIndex] = updatedRecord;
 
-        // Mirror into activeHistory (same id lookup).
-        const activeIndex = thread.activeHistory.findIndex(
-          (record) => record.id === messageId,
-        );
-        const nextActiveHistory = [...thread.activeHistory];
-        if (activeIndex !== -1) {
-          nextActiveHistory[activeIndex] = updatedRecord;
-        }
-
         updatedThread = {
           ...thread,
           history: nextHistory,
-          activeHistory: nextActiveHistory,
           updatedAt: now,
         };
       } else {
@@ -531,7 +502,6 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
         updatedThread = {
           ...thread,
           history: [...thread.history, messageRecord],
-          activeHistory: [...thread.activeHistory, messageRecord],
           updatedAt: now,
         };
       }
@@ -563,28 +533,9 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
         thread.history.map((record) => [record.message.id, record]),
       );
 
-      const rebuiltHistory: ThreadMessageRecord[] = params.messages.map(
-        (message, index) => {
-          const existing = existingById.get(message.id);
-
-          return {
-            id: existing?.id ?? randomUUID(),
-            ordinal: index + 1,
-            version: existing?.version ?? 1,
-            message,
-            usage: existing?.usage ?? emptyUsage(),
-            createdAt: existing?.createdAt ?? now,
-            updatedAt: now,
-            deletedAt: null,
-            error: existing?.error ?? null,
-          };
-        },
-      );
-
       const updatedThread: ThreadRecord = recalculateUsageAndContext({
         ...thread,
-        history: rebuiltHistory,
-        activeHistory: rebuiltHistory,
+        history: params.messages,
         lastCompactionOrdinal: null,
         updatedAt: now,
       });
@@ -628,8 +579,8 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
   }
 
   /**
-   * Recomputes `activeHistory` by filtering out all soft-deleted messages
-   * from the full `history`, then resets `lastCompactionOrdinal` to `null`.
+   * Resets `lastCompactionOrdinal` to `null` so that `deriveActiveHistory`
+   * returns all non-deleted records from the full history.
    *
    * Use this to "restore" a thread to its full history after an incorrect
    * compaction, or after manually soft-deleting specific messages.
@@ -647,13 +598,9 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
         return null;
       }
 
-      const activeHistory = thread.history.filter(
-        (message) => message.deletedAt === null,
-      );
-
       const updatedThread: ThreadRecord = {
         ...thread,
-        activeHistory,
+        lastCompactionOrdinal: null,
         updatedAt: now,
       };
 
@@ -765,7 +712,7 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
 
       const updatedThread: ThreadRecord = {
         ...thread,
-        contextSize: aggregateContextSize(thread.history),
+        contextSize: aggregateContextSize(deriveActiveHistory(thread)),
         updatedAt: new Date().toISOString(),
       };
 
@@ -775,7 +722,6 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
   }
 
   return {
-    // saveMessage,
     createThread,
     getThread,
     getThreadWithMessages,
@@ -783,6 +729,7 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
     upsertMessage,
     replaceMessages,
     softDeleteThread,
+    rebuildActiveHistory,
     compactIfNeeded,
     updateThreadSettings,
     updateThreadUsage,

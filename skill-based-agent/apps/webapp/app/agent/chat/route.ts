@@ -1,8 +1,11 @@
 import { convertToModelMessages, type UIMessage } from "ai";
 import { createRootAgent } from "@protean/protean";
-import type { ThreadMessageRecord } from "@protean/agent-memory";
+import {
+  deriveActiveHistory,
+  type ThreadMessageRecord,
+} from "@protean/agent-memory";
 import { consoleLogger } from "@protean/logger";
-import { createLocalFs } from "@protean/vfs";
+import { createRemoteFs } from "@protean/vfs";
 import {
   findModel,
   isSameModelSelection,
@@ -105,11 +108,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }
 
-  // INFO: Keep it as is, do not change the path or remove this.
-  const fs = await createLocalFs(
-    `/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project/${userId}`,
-    consoleLogger,
-  );
+  const fs = createRemoteFs({
+    baseUrl: process.env.VFS_SERVER_URL!,
+    serviceToken: process.env.VFS_SERVICE_TOKEN!,
+    userId,
+    logger: consoleLogger,
+  });
 
   // For making sure the model selection and the reasoning budget are valid.
   const requestSelection = parseModelSelection(parsedBody.modelSelection);
@@ -195,8 +199,10 @@ export async function POST(request: Request) {
 
   const compactionResult = await memory.compactIfNeeded(threadId, {
     policy: {
-      maxContextTokens: fullModelEntry.contextLimits.total,
-      reservedOutputTokens: fullModelEntry.contextLimits.maxOutput,
+      // maxContextTokens: fullModelEntry.contextLimits.total,
+      // reservedOutputTokens: fullModelEntry.contextLimits.maxOutput,
+      maxContextTokens: 5000,
+      reservedOutputTokens: 3000,
     },
     summarizeHistory: async (history) => summarizeHistory(history),
   });
@@ -208,14 +214,14 @@ export async function POST(request: Request) {
     }
   }
 
-  const activeHistory = thread.activeHistory
-    .filter((record) => record.deletedAt === null)
-    .sort((a, b) => a.ordinal - b.ordinal)
-    .map((record) => record.message);
+  const activeHistory = deriveActiveHistory(thread).map(
+    (record) => record.message,
+  );
 
   const streamStartMs = Date.now();
   const stream = await agent.stream({
     messages: await convertToModelMessages(activeHistory),
+    abortSignal: request.signal,
   });
 
   return stream.toUIMessageStreamResponse({

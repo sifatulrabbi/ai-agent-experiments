@@ -58,8 +58,8 @@ const openRouterModelSchema = z.object({
   context_length: z.number().int().positive(),
   top_provider: z
     .object({
-      context_length: z.number().int().nonnegative().optional(),
-      max_completion_tokens: z.number().int().nonnegative().optional(),
+      context_length: z.number().int().nonnegative().nullish(),
+      max_completion_tokens: z.number().int().nonnegative().nullish(),
     })
     .nullish(),
   pricing: z
@@ -96,6 +96,14 @@ function supportsReasoning(supportedParameters: string[]): boolean {
     normalized.has("include_reasoning") ||
     normalized.has("reasoning_effort")
   );
+}
+
+function supportsTools(supportedParameters: string[]): boolean {
+  const normalized = new Set(
+    supportedParameters.map((parameter) => parameter.toLowerCase()),
+  );
+
+  return normalized.has("tools");
 }
 
 function toTitleCase(value: string): string {
@@ -172,6 +180,10 @@ const providers: AIModelProviderEntry[] = parsedLegacyCatalog
         name: model.name,
         providerId: model.providerId,
         runtimeProvider: model.runtimeProvider as RuntimeProvider,
+        features: {
+          reasoning: model.reasoning.budgets.some((b) => b !== "none"),
+          tools: false,
+        },
         reasoning: {
           budgets: model.reasoning.budgets,
           defaultValue: model.reasoning.defaultValue,
@@ -204,6 +216,10 @@ const providers: AIModelProviderEntry[] = parsedLegacyCatalog
             name: model.name,
             providerId,
             runtimeProvider: "openrouter" as RuntimeProvider,
+            features: {
+              reasoning: modelSupportsReasoning,
+              tools: supportsTools(model.supported_parameters ?? []),
+            },
             reasoning: {
               budgets,
               defaultValue: modelSupportsReasoning ? "medium" : "none",

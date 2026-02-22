@@ -30,9 +30,10 @@ export async function PATCH(
   }
 
   const message = body.message as UIMessage;
-  const existingRecord = thread.history.find(
+  const existingRecordIndex = thread.history.findIndex(
     (record) => record.deletedAt === null && record.message.id === messageId,
   );
+  const existingRecord = thread.history[existingRecordIndex];
 
   if (!existingRecord || existingRecord.message.role !== "user") {
     return Response.json({ error: "Message not found" }, { status: 404 });
@@ -44,7 +45,13 @@ export async function PATCH(
     modelSelection: thread.modelSelection,
     usage: existingRecord.usage,
   });
+  if (!thread || !canAccessThread(thread, userId)) {
+    return Response.json({ error: "Thread not found" }, { status: 404 });
+  }
 
+  // Getting till the edited message
+  const updatedHistory = thread.history.slice(0, existingRecordIndex + 1);
+  thread = await memory.replaceMessages(threadId, { messages: updatedHistory });
   if (!thread || !canAccessThread(thread, userId)) {
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }

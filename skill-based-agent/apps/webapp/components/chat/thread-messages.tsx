@@ -29,7 +29,7 @@ import {
 } from "@/components/ai-elements/message";
 import { getModelById } from "@protean/model-catalog";
 import { useModelCatalog } from "@/components/chat/model-catalog-provider";
-import { ModelProviderDropdown } from "@/components/chat/model-provider-dropdown";
+import { ModelSelectorDropdown } from "@/components/chat/model-selector-dropdown";
 import { useThreadChatContext } from "@/components/chat/thread-chat-provider";
 import { ThreadMessageParts } from "@/components/chat/thread-message-parts";
 import { messageKeyFor } from "@/components/chat/thread-ui-shared";
@@ -325,7 +325,7 @@ export function ThreadMessages() {
                           Model for rerun
                         </span>
                         <div className="flex items-center gap-2">
-                          <ModelProviderDropdown
+                          <ModelSelectorDropdown
                             disabled={isBusy}
                             onChange={setEditModelSelection}
                             value={editModelSelection ?? currentModelSelection}
@@ -535,7 +535,7 @@ export function ThreadMessages() {
 
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground text-xs">Model</span>
-            <ModelProviderDropdown
+            <ModelSelectorDropdown
               disabled={isBusy}
               onChange={setRerunModelSelection}
               value={rerunModelSelection ?? currentModelSelection}

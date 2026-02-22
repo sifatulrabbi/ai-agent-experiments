@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUserId } from "@/lib/server/auth-user";
-import { resolveWithinRoot } from "@protean/vfs";
-import { readFile, stat, rm, rename } from "fs/promises";
-import { join, dirname } from "path";
-
-const WORKSPACE_BASE =
-  "/Users/sifatul/coding/ai-agent-experiments/skill-based-agent/tmp/project";
+import { createRemoteFs } from "@protean/vfs";
 
 const MIME_MAP: Record<string, string> = {
   txt: "text/plain",
@@ -34,6 +29,14 @@ function getMimeType(filePath: string): string {
   return MIME_MAP[ext] ?? "application/octet-stream";
 }
 
+function createFs(userId: string) {
+  return createRemoteFs({
+    baseUrl: process.env.VFS_SERVER_URL!,
+    serviceToken: process.env.VFS_SERVICE_TOKEN!,
+    userId,
+  });
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
@@ -45,27 +48,20 @@ export async function GET(
 
   const { path: pathSegments } = await params;
   const filePath = decodeURIComponent(pathSegments.join("/"));
-  const workspaceRoot = `${WORKSPACE_BASE}/${userId}`;
-
-  let resolvedPath: string;
-  try {
-    resolvedPath = resolveWithinRoot(workspaceRoot, filePath);
-  } catch {
-    return NextResponse.json({ error: "Path not allowed" }, { status: 403 });
-  }
+  const fs = createFs(userId);
 
   try {
-    const fileStat = await stat(resolvedPath);
-    if (fileStat.isDirectory()) {
+    const fileStat = await fs.stat(filePath);
+    if (fileStat.isDirectory) {
       return NextResponse.json(
         { error: "Cannot serve a directory" },
         { status: 400 },
       );
     }
 
-    const buffer = await readFile(resolvedPath);
-    const mimeType = getMimeType(resolvedPath);
-    const fileName = resolvedPath.split("/").pop() ?? "file";
+    const buffer = await fs.readFileBuffer(filePath);
+    const mimeType = getMimeType(filePath);
+    const fileName = filePath.split("/").pop() ?? "file";
 
     return new NextResponse(buffer, {
       headers: {
@@ -76,9 +72,12 @@ export async function GET(
       },
     });
   } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") {
+    const message = err instanceof Error ? err.message : "Failed to read file";
+    if (message.includes("NOT_FOUND") || message.includes("not found")) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
+    }
+    if (message.includes("PATH_TRAVERSAL") || message.includes("not allowed")) {
+      return NextResponse.json({ error: "Path not allowed" }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed to read file" }, { status: 500 });
   }
@@ -95,21 +94,14 @@ export async function DELETE(
 
   const { path: pathSegments } = await params;
   const filePath = decodeURIComponent(pathSegments.join("/"));
-  const workspaceRoot = `${WORKSPACE_BASE}/${userId}`;
-
-  let resolvedPath: string;
-  try {
-    resolvedPath = resolveWithinRoot(workspaceRoot, filePath);
-  } catch {
-    return NextResponse.json({ error: "Path not allowed" }, { status: 403 });
-  }
+  const fs = createFs(userId);
 
   try {
-    await rm(resolvedPath, { recursive: true, force: false });
+    await fs.remove(filePath);
     return NextResponse.json({ deleted: true });
   } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") {
+    const message = err instanceof Error ? err.message : "Failed to delete";
+    if (message.includes("NOT_FOUND") || message.includes("not found")) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
@@ -127,14 +119,6 @@ export async function PATCH(
 
   const { path: pathSegments } = await params;
   const filePath = decodeURIComponent(pathSegments.join("/"));
-  const workspaceRoot = `${WORKSPACE_BASE}/${userId}`;
-
-  let resolvedPath: string;
-  try {
-    resolvedPath = resolveWithinRoot(workspaceRoot, filePath);
-  } catch {
-    return NextResponse.json({ error: "Path not allowed" }, { status: 403 });
-  }
 
   let newName: string;
   try {
@@ -150,21 +134,31 @@ export async function PATCH(
     );
   }
 
-  const newPath = join(dirname(resolvedPath), newName);
   try {
-    resolveWithinRoot(workspaceRoot, newPath);
-  } catch {
-    return NextResponse.json({ error: "Path not allowed" }, { status: 403 });
-  }
+    const vfsUrl = process.env.VFS_SERVER_URL!;
+    const res = await fetch(`${vfsUrl}/api/v1/files/rename`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.VFS_SERVICE_TOKEN!}`,
+        "X-User-Id": userId,
+      },
+      body: JSON.stringify({ path: filePath, newName }),
+    });
 
-  try {
-    await rename(resolvedPath, newPath);
-    return NextResponse.json({ renamed: true, newName });
-  } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") {
-      return NextResponse.json({ error: "File not found" }, { status: 404 });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      const msg = body?.error?.message ?? "Failed to rename";
+      if (res.status === 404) {
+        return NextResponse.json({ error: "File not found" }, { status: 404 });
+      }
+      return NextResponse.json({ error: msg }, { status: res.status });
     }
+
+    return NextResponse.json({ renamed: true, newName });
+  } catch {
     return NextResponse.json({ error: "Failed to rename" }, { status: 500 });
   }
 }
