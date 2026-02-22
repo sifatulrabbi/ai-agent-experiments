@@ -108,10 +108,10 @@ function collapseSteps(
       const toolPart = part as ThreadToolPart;
       const toolName = getToolName(toolPart);
 
-      // Collect consecutive parts with the same tool name.
-      // Keep sub-agent calls ungrouped so each call stays on one line.
+      // Keep file-related tools grouped (existing UI), and render non-file
+      // tools ungrouped so each call can show a concise input summary.
       const grouped: ThreadToolPart[] = [toolPart];
-      const shouldGroup = !isSubAgentToolName(toolName);
+      const shouldGroup = isFileToolName(toolName);
       let j = i + 1;
       while (shouldGroup && j < chainParts.length) {
         const next = chainParts[j];
@@ -177,6 +177,55 @@ function isSubAgentToolName(toolName: string): boolean {
   return normalized === "spawnsubagent";
 }
 
+function isWebToolName(toolName: string): boolean {
+  const normalized = toolName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return (
+    normalized === "websearchgeneral" ||
+    normalized === "websearchnews" ||
+    normalized === "webfetchurlcontent"
+  );
+}
+
+function isFileToolName(toolName: string): boolean {
+  const normalized = toolName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const workspaceToolNames = new Set([
+    "getfilestat",
+    "readdir",
+    "getfilecontent",
+    "createdirectory",
+    "writefile",
+    "remove",
+  ]);
+  return workspaceToolNames.has(normalized);
+}
+
+function toInputRecord(
+  toolPart: ThreadToolPart,
+): Record<string, unknown> | null {
+  const input = toolPart.input as Record<string, unknown> | null | undefined;
+  return input ?? null;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function toSingleLine(value: string, maxLen = 140): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLen) return normalized;
+  return `${normalized.slice(0, maxLen - 1)}…`;
+}
+
+function toCompactJson(value: unknown): string | null {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
+  }
+}
+
 function getChainHeader(parts: ChainPart[], isStreaming: boolean): string {
   if (isStreaming) return "Working...";
 
@@ -209,13 +258,61 @@ function getToolStepStatus(
 }
 
 function getGoalDescription(toolPart: ThreadToolPart): string | null {
-  if (!isSubAgentToolName(getToolName(toolPart))) return null;
-  const input = toolPart.input as Record<string, unknown> | null | undefined;
-  if (!input) return null;
-  const goal = typeof input.goal === "string" ? input.goal.trim() : null;
-  if (!goal) return null;
-  // return goal.length > 80 ? `${goal.slice(0, 80)}…` : goal;
-  return goal;
+  const toolName = getToolName(toolPart);
+  if (isFileToolName(toolName)) return null;
+
+  const input = toInputRecord(toolPart);
+  if (!input) {
+    if (
+      typeof toolPart.input === "string" &&
+      toolPart.input.trim().length > 0
+    ) {
+      return `Input: ${toSingleLine(toolPart.input)}`;
+    }
+    return null;
+  }
+
+  if (isSubAgentToolName(toolName)) {
+    const goal = stringOrNull(input.goal);
+    if (goal) return `Goal: ${toSingleLine(goal)}`;
+    const fallback = toCompactJson(input);
+    return fallback ? `Input: ${toSingleLine(fallback)}` : null;
+  }
+
+  const normalized = toolName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (normalized === "websearchgeneral" || normalized === "websearchnews") {
+    const query =
+      stringOrNull(input.query) ??
+      stringOrNull(input.q) ??
+      stringOrNull(input.searchQuery);
+    if (!query) return null;
+    return normalized === "websearchnews"
+      ? `Search news for: ${toSingleLine(query)}`
+      : `Search web for: ${toSingleLine(query)}`;
+  }
+
+  if (normalized === "webfetchurlcontent") {
+    const directUrl = stringOrNull(input.url);
+    if (directUrl) {
+      return `Fetch URL content: ${toSingleLine(directUrl)}`;
+    }
+
+    if (Array.isArray(input.urls)) {
+      const urls = input.urls
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+      if (urls.length === 1) {
+        return `Fetch URL content: ${toSingleLine(urls[0] ?? "")}`;
+      }
+      if (urls.length > 1) {
+        return `Fetch URL content from ${urls.length} URLs`;
+      }
+    }
+  }
+
+  const fallback = toCompactJson(input);
+  return fallback ? `Input: ${toSingleLine(fallback)}` : null;
 }
 
 function getGroupedStatus(
@@ -369,8 +466,6 @@ export function ThreadMessageParts({
                             />
                           ))}
                         </div>
-                      ) : goalDescription?.trim() ? (
-                        <p>{goalDescription}</p>
                       ) : null}
                     </ChainOfThoughtStep>
                   );

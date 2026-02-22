@@ -1,6 +1,9 @@
 import { convertToModelMessages, type UIMessage } from "ai";
 import { createRootAgent } from "@protean/protean";
-import type { ThreadMessageRecord } from "@protean/agent-memory";
+import {
+  deriveActiveHistory,
+  type ThreadMessageRecord,
+} from "@protean/agent-memory";
 import { consoleLogger } from "@protean/logger";
 import { createRemoteFs } from "@protean/vfs";
 import {
@@ -196,8 +199,10 @@ export async function POST(request: Request) {
 
   const compactionResult = await memory.compactIfNeeded(threadId, {
     policy: {
-      maxContextTokens: fullModelEntry.contextLimits.total,
-      reservedOutputTokens: fullModelEntry.contextLimits.maxOutput,
+      // maxContextTokens: fullModelEntry.contextLimits.total,
+      // reservedOutputTokens: fullModelEntry.contextLimits.maxOutput,
+      maxContextTokens: 5000,
+      reservedOutputTokens: 3000,
     },
     summarizeHistory: async (history) => summarizeHistory(history),
   });
@@ -209,10 +214,9 @@ export async function POST(request: Request) {
     }
   }
 
-  const activeHistory = thread.activeHistory
-    .filter((record) => record.deletedAt === null)
-    .sort((a, b) => a.ordinal - b.ordinal)
-    .map((record) => record.message);
+  const activeHistory = deriveActiveHistory(thread).map(
+    (record) => record.message,
+  );
 
   const streamStartMs = Date.now();
   const stream = await agent.stream({

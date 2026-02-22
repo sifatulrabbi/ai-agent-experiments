@@ -10,13 +10,10 @@ export interface ThreadUsage {
 
 /**
  * Snapshot of the active context window size.
- * Tracks only the tokens that are currently visible to the model
- * (i.e. from `activeHistory`, not the full `history`).
+ * Tracks total tokens currently visible to the model
+ * (derived from `history` + `lastCompactionOrdinal`).
  */
-export interface ContextSize {
-  totalInputTokens: number;
-  totalOutputTokens: number;
-}
+export type ContextSize = number;
 
 /**
  * A single persisted message within a thread.
@@ -25,7 +22,7 @@ export interface ContextSize {
  *   and used to reconstruct ordering after compaction.
  * - `version` is incremented when the record itself is mutated in place.
  * - `deletedAt` enables soft-deletion: the record stays on disk but is
- *   excluded from `activeHistory` and context-size calculations.
+ *   excluded from the derived active history and context-size calculations.
  */
 export interface ThreadMessageRecord {
   id: string;
@@ -42,11 +39,11 @@ export interface ThreadMessageRecord {
 /**
  * The root object written to each `.threads/thread.<id>.json` file.
  *
- * - `history`        — immutable append-only log of every message ever saved.
- * - `activeHistory`  — subset of `history` used as the model's context window;
- *                      rebuilt after compaction or soft-deletion.
- * - `lastCompactionOrdinal` — ordinal of the last message that was replaced
- *                             by a compaction summary, or `null` if never compacted.
+ * - `history`        — append-only log of every message ever saved, including
+ *                      compaction summaries.
+ * - `lastCompactionOrdinal` — ordinal up to which messages were compacted.
+ *                             The active context window is derived at runtime
+ *                             via `deriveActiveHistory(thread)`.
  * - `schemaVersion` / `contentSchemaVersion` — bumped when the file format or
  *   the message content format changes, enabling forward-compatible migrations.
  */
@@ -58,7 +55,6 @@ export interface ThreadRecord {
   title: string;
   modelSelection: ModelSelection;
   history: ThreadMessageRecord[];
-  activeHistory: ThreadMessageRecord[];
   lastCompactionOrdinal: number | null;
   contextSize: ContextSize;
   usage: ThreadUsage;
@@ -67,10 +63,7 @@ export interface ThreadRecord {
   deletedAt: string | null;
 }
 
-export type ThreadRecordTrimmed = Omit<
-  ThreadRecord,
-  "history" | "activeHistory"
->;
+export type ThreadRecordTrimmed = Omit<ThreadRecord, "history">;
 
 /**
  * @deprecated Import from `@protean/model-catalog` instead.
@@ -142,8 +135,8 @@ export interface SaveThreadMessageParams {
 
 /**
  * Defines when the compactor should trigger.
- * Compaction replaces the full `activeHistory` with a single summary message
- * once the token budget would be exceeded.
+ * Compaction appends a summary record to `history` and advances
+ * `lastCompactionOrdinal` once the token budget would be exceeded.
  */
 export interface CompactionPolicy {
   /** Hard limit on combined input + output tokens in the active context. */
@@ -159,9 +152,9 @@ export interface CompactionPolicy {
 export interface CompactThreadOptions {
   policy: CompactionPolicy;
   /**
-   * Caller-supplied function that distils the full message history into a
-   * single summary `UIMessage`. The compactor replaces `activeHistory`
-   * with a synthetic record built from this message.
+   * Caller-supplied function that distils the active message history into a
+   * single summary `UIMessage`. The compactor appends this as a synthetic
+   * record in `history` and advances `lastCompactionOrdinal`.
    */
   summarizeHistory: (history: ThreadMessageRecord[]) => Promise<UIMessage>;
   /** Override the current timestamp (ISO-8601). Useful in tests. */
@@ -200,6 +193,10 @@ export interface AgentMemory {
     threadId: string,
     options?: { deletedAt?: string },
   ): Promise<boolean>;
+  rebuildActiveHistory(
+    threadId: string,
+    options?: { now?: string },
+  ): Promise<ThreadRecord | null>;
   compactIfNeeded(
     threadId: string,
     options: CompactThreadOptions,

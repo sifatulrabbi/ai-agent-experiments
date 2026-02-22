@@ -8,6 +8,7 @@ import { createLocalFs, type FS } from "@protean/vfs";
 
 import {
   createFsMemory,
+  deriveActiveHistory,
   type ModelSelection,
   type ThreadPricingCalculator,
 } from "../index";
@@ -65,7 +66,7 @@ describe("createFsMemory", () => {
     });
 
     expect(thread.history).toEqual([]);
-    expect(thread.activeHistory).toEqual([]);
+    expect(deriveActiveHistory(thread)).toEqual([]);
     expect(thread.lastCompactionOrdinal).toBeNull();
     expect(thread.deletedAt).toBeNull();
     expect(thread.userId).toBe("user-1");
@@ -115,8 +116,9 @@ describe("createFsMemory", () => {
       modelSelection: defaultModelSelection,
     });
     const messageId = randomUUID();
+    const now = new Date().toISOString();
 
-    await repo.saveMessage(thread.id, {
+    const saved = await repo.upsertMessage(thread.id, {
       message: textMessage("user", "pending", { id: messageId }),
       usage: {
         inputTokens: 2,
@@ -126,14 +128,16 @@ describe("createFsMemory", () => {
       modelSelection: defaultModelSelection,
     });
 
+    const updatedRecord = {
+      ...saved!.history[0]!,
+      message: {
+        ...saved!.history[0]!.message,
+        parts: [{ type: "text" as const, text: "finalized" }],
+      },
+    };
+
     const replaced = await repo.replaceMessages(thread.id, {
-      messages: [
-        {
-          id: messageId,
-          role: "user",
-          parts: [{ type: "text", text: "finalized" }],
-        },
-      ],
+      messages: [updatedRecord],
     });
 
     expect(replaced?.history.length).toBe(1);
@@ -149,7 +153,7 @@ describe("createFsMemory", () => {
       modelSelection: defaultModelSelection,
     });
 
-    const updated = await repo.saveMessage(thread.id, {
+    const updated = await repo.upsertMessage(thread.id, {
       message: textMessage("user", "hello"),
       usage: {
         inputTokens: 10,
@@ -183,7 +187,7 @@ describe("createFsMemory", () => {
       ],
     };
 
-    await repo.saveMessage(thread.id, {
+    await repo.upsertMessage(thread.id, {
       message,
       usage: {
         inputTokens: 5,
@@ -194,7 +198,7 @@ describe("createFsMemory", () => {
     });
 
     const reloadedRepo = createRepository();
-    const reloaded = await reloadedRepo.getThread(thread.id);
+    const reloaded = await reloadedRepo.getThreadWithMessages(thread.id);
 
     expect(reloaded?.history[0]?.message).toEqual(message);
   });
@@ -206,7 +210,7 @@ describe("createFsMemory", () => {
       modelSelection: defaultModelSelection,
     });
 
-    await repo.saveMessage(thread.id, {
+    await repo.upsertMessage(thread.id, {
       message: textMessage("user", "first"),
       usage: {
         inputTokens: 10,
@@ -216,7 +220,7 @@ describe("createFsMemory", () => {
       modelSelection: defaultModelSelection,
     });
 
-    const updated = await repo.saveMessage(thread.id, {
+    const updated = await repo.upsertMessage(thread.id, {
       message: textMessage("assistant", "second"),
       usage: {
         inputTokens: 3,
@@ -226,11 +230,10 @@ describe("createFsMemory", () => {
       modelSelection: defaultModelSelection,
     });
 
-    expect(updated?.usage.inputTokens).toBe(13);
+    expect(updated?.usage.inputTokens).toBe(5);
     expect(updated?.usage.outputTokens).toBe(9);
     expect(updated?.usage.totalDurationMs).toBe(350);
-    expect(updated?.contextSize.totalInputTokens).toBe(13);
-    expect(updated?.contextSize.totalOutputTokens).toBe(9);
+    expect(updated?.contextSize).toBe(5);
   });
 
   test("soft delete marks thread and list hides it by default", async () => {
@@ -251,14 +254,14 @@ describe("createFsMemory", () => {
     expect(deletedThread?.deletedAt).not.toBeNull();
   });
 
-  test("compaction summarizes full history into a single user message", async () => {
+  test("compaction summarizes history into an assistant tool-call message", async () => {
     const repo = createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
     });
 
-    await repo.saveMessage(thread.id, {
+    await repo.upsertMessage(thread.id, {
       message: textMessage("user", "hello"),
       usage: {
         inputTokens: 400,
@@ -268,7 +271,7 @@ describe("createFsMemory", () => {
       modelSelection: defaultModelSelection,
     });
 
-    await repo.saveMessage(thread.id, {
+    await repo.upsertMessage(thread.id, {
       message: textMessage("assistant", "response"),
       usage: {
         inputTokens: 100,
@@ -280,7 +283,7 @@ describe("createFsMemory", () => {
 
     const compacted = await repo.compactIfNeeded(thread.id, {
       policy: {
-        maxContextTokens: 200,
+        maxContextTokens: 1,
       },
       summarizeHistory: async (history) => ({
         id: randomUUID(),
@@ -291,11 +294,20 @@ describe("createFsMemory", () => {
 
     expect(compacted).not.toBeNull();
     expect(compacted?.didCompact).toBe(true);
-    expect(compacted?.thread.activeHistory.length).toBe(1);
-    expect(compacted?.thread.activeHistory[0]?.message.role).toBe("user");
-    expect(compacted?.thread.activeHistory[0]?.message.parts).toEqual([
-      { type: "text", text: "summary:2" },
-    ]);
+
+    // Summary is appended to history (original 2 + 1 summary)
+    expect(compacted?.thread.history.length).toBe(3);
+
+    const active = deriveActiveHistory(compacted!.thread);
+    expect(active.length).toBe(1);
+    expect(active[0]?.message.role).toBe("assistant");
+
+    const toolPart = active[0]?.message.parts[0] as Record<string, unknown>;
+    expect(toolPart.type).toBe("dynamic-tool");
+    expect(toolPart.toolName).toBe("AutoCompactHistory");
+    expect(toolPart.state).toBe("output-available");
+    expect(toolPart.output).toEqual({ summary: "summary:2" });
+
     expect(compacted?.thread.lastCompactionOrdinal).toBe(2);
   });
 
@@ -306,7 +318,7 @@ describe("createFsMemory", () => {
       modelSelection: defaultModelSelection,
     });
 
-    await repo.saveMessage(thread.id, {
+    await repo.upsertMessage(thread.id, {
       message: textMessage("user", "small"),
       usage: {
         inputTokens: 5,
@@ -328,7 +340,7 @@ describe("createFsMemory", () => {
     });
 
     expect(compacted?.didCompact).toBe(false);
-    expect(compacted?.thread.activeHistory.length).toBe(1);
+    expect(deriveActiveHistory(compacted!.thread).length).toBe(1);
     expect(compacted?.thread.lastCompactionOrdinal).toBeNull();
   });
 
@@ -339,7 +351,7 @@ describe("createFsMemory", () => {
       modelSelection: defaultModelSelection,
     });
 
-    await repo.saveMessage(thread.id, {
+    await repo.upsertMessage(thread.id, {
       message: textMessage("user", "a"),
       usage: {
         inputTokens: 300,
@@ -351,7 +363,7 @@ describe("createFsMemory", () => {
 
     await repo.compactIfNeeded(thread.id, {
       policy: {
-        maxContextTokens: 100,
+        maxContextTokens: -1,
       },
       summarizeHistory: async () => ({
         id: randomUUID(),
@@ -362,8 +374,10 @@ describe("createFsMemory", () => {
 
     const rebuilt = await repo.rebuildActiveHistory(thread.id);
 
-    expect(rebuilt?.activeHistory.length).toBe(1);
-    expect(rebuilt?.activeHistory[0]?.message.role).toBe("user");
+    const active = deriveActiveHistory(rebuilt!);
+    // After rebuild, active history includes original message + compaction summary
+    expect(active.length).toBe(2);
+    expect(active[0]?.message.role).toBe("user");
     expect(rebuilt?.lastCompactionOrdinal).toBeNull();
   });
 
@@ -377,7 +391,7 @@ describe("createFsMemory", () => {
     const count = 30;
     await Promise.all(
       Array.from({ length: count }, (_, idx) =>
-        repo.saveMessage(thread.id, {
+        repo.upsertMessage(thread.id, {
           message: textMessage("user", `message-${idx}`),
           usage: {
             inputTokens: 1,
@@ -389,7 +403,7 @@ describe("createFsMemory", () => {
       ),
     );
 
-    const reloaded = await repo.getThread(thread.id);
+    const reloaded = await repo.getThreadWithMessages(thread.id);
     const ordinals = reloaded?.history.map((item) => item.ordinal) ?? [];
 
     expect(ordinals.length).toBe(count);
@@ -410,7 +424,7 @@ describe("createFsMemory", () => {
       modelSelection: defaultModelSelection,
     });
 
-    const updated = await repo.saveMessage(thread.id, {
+    const updated = await repo.upsertMessage(thread.id, {
       message: textMessage("user", "price me"),
       usage: {
         inputTokens: 10,
@@ -443,5 +457,6 @@ describe("createFsMemory", () => {
     expect(parsed.contentSchemaVersion).toBe(1);
     expect(parsed.id).toBe(thread.id);
     expect(parsed.history.length).toBe(0);
+    expect((parsed as Record<string, unknown>).activeHistory).toBeUndefined();
   });
 });

@@ -1,3 +1,5 @@
+import { countTokenFast } from "@protean/utils";
+
 import type {
   ContextSize,
   ThreadMessageRecord,
@@ -15,12 +17,9 @@ export function emptyUsage(): ThreadUsage {
   };
 }
 
-/** Returns a zeroed-out {@link ContextSize} object. Used as the initial accumulator. */
+/** Returns a zeroed-out {@link ContextSize} value. */
 export function emptyContextSize(): ContextSize {
-  return {
-    totalInputTokens: 0,
-    totalOutputTokens: 0,
-  };
+  return 0;
 }
 
 /**
@@ -34,39 +33,76 @@ export function emptyContextSize(): ContextSize {
 export function aggregateThreadUsage(
   history: ThreadMessageRecord[],
 ): ThreadUsage {
-  return history.reduce<ThreadUsage>(
+  const activeMessages = history.filter(
+    (message) => message.deletedAt === null,
+  );
+  const totalInputTokens = countTokenFast(
+    ...activeMessages.map((message) => messagePartsToText(message)),
+  );
+  const usageTotals = activeMessages.reduce<ThreadUsage>(
     (acc, message) => ({
-      inputTokens: acc.inputTokens + message.usage.inputTokens,
+      ...acc,
       outputTokens: acc.outputTokens + message.usage.outputTokens,
       totalDurationMs: acc.totalDurationMs + message.usage.totalDurationMs,
       totalCostUsd: acc.totalCostUsd + message.usage.totalCostUsd,
     }),
     emptyUsage(),
   );
+
+  return {
+    ...usageTotals,
+    inputTokens: totalInputTokens,
+  };
+}
+
+/**
+ * Extracts all the text content of tool context as string from the thread message.
+ */
+function messagePartsToText(message: ThreadMessageRecord): string {
+  const textContents: string[] = [];
+
+  message.message.parts.forEach((part) => {
+    if (part.type === "text" && typeof part.text === "string") {
+      textContents.push(part.text);
+    }
+
+    if (part.type === "reasoning" && typeof part.text === "string") {
+      textContents.push(part.text);
+    }
+
+    if (part.type === "dynamic-tool") {
+      if (typeof part.input === "string") {
+        textContents.push(part.input);
+      } else if (typeof part.input === "object") {
+        textContents.push(JSON.stringify(part.input));
+      }
+
+      if (typeof part.output === "string") {
+        textContents.push(part.output);
+      } else if (typeof part.output === "object") {
+        textContents.push(JSON.stringify(part.output));
+      }
+    }
+  });
+
+  return textContents.join("\n");
 }
 
 /**
  * Computes the active context-window token counts from non-deleted messages.
  *
- * Unlike {@link aggregateThreadUsage}, this is typically called on
- * `activeHistory` rather than the full `history` to reflect what the model
- * currently sees in its context window.
+ * Unlike {@link aggregateThreadUsage}, this is typically called on the
+ * result of `deriveActiveHistory(thread)` rather than the full `history`
+ * to reflect what the model currently sees in its context window.
  *
- * @param history - Usually `ThreadRecord.activeHistory`.
+ * @param history - Usually the output of `deriveActiveHistory(thread)`.
  */
-export function aggregateContextSize(
-  history: ThreadMessageRecord[],
-): ContextSize {
+export function aggregateContextSize(history: ThreadMessageRecord[]) {
   const activeMessages = history.filter(
     (message) => message.deletedAt === null,
   );
-
-  return activeMessages.reduce<ContextSize>(
-    (acc, message) => ({
-      totalInputTokens: acc.totalInputTokens + message.usage.inputTokens,
-      totalOutputTokens: acc.totalOutputTokens + message.usage.outputTokens,
-    }),
-    emptyContextSize(),
+  return countTokenFast(
+    ...activeMessages.map((msg) => messagePartsToText(msg)),
   );
 }
 

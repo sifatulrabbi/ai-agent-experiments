@@ -9,7 +9,11 @@
  */
 export { ThreadMemoryError } from "./errors";
 export { createHistoryCompactor } from "./compaction";
-export { createFsMemory, modelSelectionSchema } from "./fs-memory";
+export {
+  createFsMemory,
+  modelSelectionSchema,
+  deriveActiveHistory,
+} from "./fs-memory";
 export type { FsMemoryOptions } from "./fs-memory";
 
 export { reasoningBudgets } from "./types";
