@@ -128,7 +128,7 @@ export function ThreadsSidebar({
       </Button>
 
       <ScrollArea className="mt-3 min-h-0 flex-1 pr-1">
-        <div className="space-y-1 pb-2">
+        <div className="w-full space-y-1 pb-2">
           {threadItems.length === 0 ? (
             <p className="px-2 py-1 text-muted-foreground text-sm">
               No previous threads.
@@ -143,13 +143,13 @@ export function ThreadsSidebar({
 
               return (
                 <div
-                  className={`group flex items-start gap-1 rounded-md transition-colors ${
+                  className={`group flex min-w-0 items-start gap-1 rounded-md transition-colors ${
                     isActive ? "bg-accent" : "hover:bg-accent/70"
                   }`}
                   key={thread.id}
                 >
                   <Link
-                    className="block min-w-0 flex-1 rounded-md px-2 py-2"
+                    className="block min-w-0 flex-1 overflow-hidden rounded-md px-2 py-2"
                     href={`/chats/t/${thread.id}`}
                   >
                     <p className="truncate font-medium text-sm">

@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { UIMessage } from "ai";
 import {
   resolveModelSelection,
   parseModelSelection,
@@ -44,17 +43,6 @@ export async function POST(request: Request) {
     request: parseModelSelection(body?.modelSelection),
   });
 
-  const messages: UIMessage[] = initialUserMessage
-    ? [
-        {
-          id: randomUUID(),
-          metadata: { pending: true },
-          parts: [{ text: initialUserMessage, type: "text" }],
-          role: "user",
-        },
-      ]
-    : [];
-
   const memory = await getAgentMemory();
   let thread: ThreadRecord | null = await memory.createThread({
     userId,
@@ -62,14 +50,29 @@ export async function POST(request: Request) {
     modelSelection,
   });
 
-  if (messages.length > 0) {
-    thread = await memory.replaceMessages(thread.id, { messages });
-    if (!thread) {
-      return Response.json(
-        { message: "Unable to create thread." },
-        { status: 400 },
-      );
-    }
+  if (!thread) {
+    return Response.json(
+      { message: "Failed to start a new thread" },
+      { status: 400 },
+    );
+  }
+
+  if (initialUserMessage) {
+    thread = await memory.upsertMessage(thread.id, {
+      message: {
+        id: randomUUID(),
+        metadata: { pending: true },
+        parts: [{ text: initialUserMessage, type: "text" }],
+        role: "user",
+      },
+      modelSelection,
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        totalDurationMs: 0,
+        totalCostUsd: 0,
+      },
+    });
   }
 
   return Response.json({ thread }, { status: 201 });

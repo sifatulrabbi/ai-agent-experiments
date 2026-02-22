@@ -563,28 +563,10 @@ export function createFsMemory(options: FsMemoryOptions): AgentMemory {
         thread.history.map((record) => [record.message.id, record]),
       );
 
-      const rebuiltHistory: ThreadMessageRecord[] = params.messages.map(
-        (message, index) => {
-          const existing = existingById.get(message.id);
-
-          return {
-            id: existing?.id ?? randomUUID(),
-            ordinal: index + 1,
-            version: existing?.version ?? 1,
-            message,
-            usage: existing?.usage ?? emptyUsage(),
-            createdAt: existing?.createdAt ?? now,
-            updatedAt: now,
-            deletedAt: null,
-            error: existing?.error ?? null,
-          };
-        },
-      );
-
       const updatedThread: ThreadRecord = recalculateUsageAndContext({
         ...thread,
-        history: rebuiltHistory,
-        activeHistory: rebuiltHistory,
+        history: params.messages,
+        activeHistory: params.messages,
         lastCompactionOrdinal: null,
         updatedAt: now,
       });

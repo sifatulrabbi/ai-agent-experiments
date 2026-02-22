@@ -9,6 +9,7 @@ import {
 } from "@/components/chat/thread-ui-shared";
 import { FileArtifact } from "@/components/chat/file-artifact";
 import { detectFilesFromToolResult } from "@/lib/file-utils";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -62,6 +63,14 @@ function groupParts(parts: UIMessage["parts"]): PartGroup[] {
   }
 
   return groups;
+}
+
+function hasOutputAfterGroup(groups: PartGroup[], index: number): boolean {
+  return groups
+    .slice(index + 1)
+    .some(
+      (group) => group.type === "text" && group.part.text.trim().length > 0,
+    );
 }
 
 // ─── Step collapsing (merge consecutive same-name tool calls into one step) ───
@@ -274,16 +283,23 @@ export function ThreadMessageParts({
         const chainParts = group.parts;
         const isLastGroup = groupIndex === groups.length - 1;
         const isChainStreaming = isLastMessage && isStreaming && isLastGroup;
+        const hasOutputAfter = hasOutputAfterGroup(groups, groupIndex);
         const steps = collapseSteps(chainParts, messageKey, group.startIndex);
         const chainContentId = `cot-content-${sanitizeIdSegment(messageKey)}-${group.startIndex}-${groupIndex}`;
 
         return (
           <ChainOfThought
-            key={`${messageKey}-chain-${groupIndex}`}
+            key={`${messageKey}-chain-${groupIndex}-${hasOutputAfter ? "collapsed" : "live"}`}
             defaultOpen={isLastGroup && isLastMessage}
           >
             <ChainOfThoughtHeader aria-controls={chainContentId}>
-              {getChainHeader(chainParts, isChainStreaming)}
+              {isChainStreaming ? (
+                <Shimmer duration={1.2}>
+                  {getChainHeader(chainParts, isChainStreaming)}
+                </Shimmer>
+              ) : (
+                getChainHeader(chainParts, isChainStreaming)
+              )}
             </ChainOfThoughtHeader>
             <ChainOfThoughtContent id={chainContentId}>
               {steps.map((step) => {
@@ -326,7 +342,22 @@ export function ThreadMessageParts({
                     <ChainOfThoughtStep
                       key={step.key}
                       icon={WrenchIcon}
-                      label={toolName}
+                      label={
+                        isThisStepStreaming ? (
+                          <Shimmer duration={1.2}>{toolName}</Shimmer>
+                        ) : (
+                          toolName
+                        )
+                      }
+                      description={
+                        goalDescription?.trim() ? (
+                          isThisStepStreaming ? (
+                            <Shimmer duration={1.2}>{goalDescription}</Shimmer>
+                          ) : (
+                            goalDescription
+                          )
+                        ) : undefined
+                      }
                       status={status}
                     >
                       {files && files.length > 0 ? (
@@ -360,7 +391,13 @@ export function ThreadMessageParts({
                   <ChainOfThoughtStep
                     key={step.key}
                     icon={WrenchIcon}
-                    label={step.toolName}
+                    label={
+                      isThisStepStreaming ? (
+                        <Shimmer duration={1.2}>{step.toolName}</Shimmer>
+                      ) : (
+                        step.toolName
+                      )
+                    }
                     status={status}
                   >
                     {allFiles.length > 0 && (

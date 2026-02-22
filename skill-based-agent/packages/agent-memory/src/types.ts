@@ -116,7 +116,7 @@ export interface UpdateThreadSettingsParams {
 }
 
 export interface ReplaceThreadMessagesParams {
-  messages: UIMessage[];
+  messages: ThreadMessageRecord[];
   now?: string;
 }
 
