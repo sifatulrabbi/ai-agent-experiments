@@ -106,7 +106,9 @@ export function createRemoteFs(config: RemoteFsConfig): FS {
       });
       const formData = new FormData();
       formData.append("path", filePath);
-      formData.append("file", new Blob([content]));
+      const blobPayload = new Uint8Array(content.length);
+      blobPayload.set(content);
+      formData.append("file", new Blob([blobPayload]));
       const res = await fetch(`${base}/api/v1/files/write-binary`, {
         method: "POST",
         headers: headers(),
