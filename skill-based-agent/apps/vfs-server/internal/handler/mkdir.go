@@ -34,7 +34,7 @@ func MkDir(workspaceBase string, locker *fsops.UserLocker) http.HandlerFunc {
 		locker.Lock(userID)
 		defer locker.Unlock(userID)
 
-		if err := os.MkdirAll(resolved, 0755); err != nil {
+		if err := os.MkdirAll(resolved, 0o755); err != nil {
 			fsops.WriteError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
 		}

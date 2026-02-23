@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }
 
-  const fs = createRemoteFs({
+  const fs = await createRemoteFs({
     baseUrl: process.env.VFS_SERVER_URL!,
     serviceToken: process.env.VFS_SERVICE_TOKEN!,
     userId,

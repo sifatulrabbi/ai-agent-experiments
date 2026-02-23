@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
   const dir = request.nextUrl.searchParams.get("dir") ?? "/";
 
-  const fs = createRemoteFs({
+  const fs = await createRemoteFs({
     baseUrl: process.env.VFS_SERVER_URL!,
     serviceToken: process.env.VFS_SERVICE_TOKEN!,
     userId,

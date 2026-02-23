@@ -29,8 +29,8 @@ function getMimeType(filePath: string): string {
   return MIME_MAP[ext] ?? "application/octet-stream";
 }
 
-function createFs(userId: string) {
-  return createRemoteFs({
+async function createFs(userId: string) {
+  return await createRemoteFs({
     baseUrl: process.env.VFS_SERVER_URL!,
     serviceToken: process.env.VFS_SERVICE_TOKEN!,
     userId,
@@ -48,7 +48,7 @@ export async function GET(
 
   const { path: pathSegments } = await params;
   const filePath = decodeURIComponent(pathSegments.join("/"));
-  const fs = createFs(userId);
+  const fs = await createFs(userId);
 
   try {
     const fileStat = await fs.stat(filePath);
@@ -94,7 +94,7 @@ export async function DELETE(
 
   const { path: pathSegments } = await params;
   const filePath = decodeURIComponent(pathSegments.join("/"));
-  const fs = createFs(userId);
+  const fs = await createFs(userId);
 
   try {
     await fs.remove(filePath);

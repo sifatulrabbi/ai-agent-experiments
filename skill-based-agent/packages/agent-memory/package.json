@@ -19,6 +19,7 @@
     "@protean/model-catalog": "workspace:*",
     "@protean/vfs": "workspace:*",
     "@protean/utils": "workspace:*",
+    "@protean/logger": "workspace:*",
     "ai": "^6.0.78",
     "zod": "^4.3.6"
   },

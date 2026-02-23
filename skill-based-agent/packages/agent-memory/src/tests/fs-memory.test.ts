@@ -12,6 +12,7 @@ import {
   type ModelSelection,
   type ThreadPricingCalculator,
 } from "../index";
+import { consoleLogger } from "@protean/logger";
 
 const defaultModelSelection: ModelSelection = {
   providerId: "openrouter",
@@ -35,12 +36,15 @@ afterEach(async () => {
   }
 });
 
-function createRepository(pricingCalculator?: ThreadPricingCalculator) {
-  return createFsMemory({
-    fs,
-    dirPath: threadsDir,
-    pricingCalculator,
-  });
+async function createRepository(pricingCalculator?: ThreadPricingCalculator) {
+  return await createFsMemory(
+    {
+      fs,
+      dirPath: threadsDir,
+      pricingCalculator,
+    },
+    consoleLogger,
+  );
 }
 
 function textMessage(
@@ -58,7 +62,7 @@ function textMessage(
 
 describe("createFsMemory", () => {
   test("creates thread with empty history and active history", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       title: "My Thread",
@@ -75,7 +79,7 @@ describe("createFsMemory", () => {
   });
 
   test("filters listThreads by user id", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
@@ -91,7 +95,7 @@ describe("createFsMemory", () => {
   });
 
   test("updates thread metadata via updateThreadSettings", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
@@ -110,7 +114,7 @@ describe("createFsMemory", () => {
   });
 
   test("replaceMessages updates existing message payloads in-place", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
@@ -147,7 +151,7 @@ describe("createFsMemory", () => {
   });
 
   test("saves first user message with ordinal 1", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
@@ -169,7 +173,7 @@ describe("createFsMemory", () => {
   });
 
   test("persists and reloads ui message fidelity", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
@@ -197,14 +201,14 @@ describe("createFsMemory", () => {
       modelSelection: defaultModelSelection,
     });
 
-    const reloadedRepo = createRepository();
+    const reloadedRepo = await createRepository();
     const reloaded = await reloadedRepo.getThreadWithMessages(thread.id);
 
     expect(reloaded?.history[0]?.message).toEqual(message);
   });
 
   test("aggregates usage and context over multiple messages", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
@@ -237,7 +241,7 @@ describe("createFsMemory", () => {
   });
 
   test("soft delete marks thread and list hides it by default", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
@@ -255,7 +259,7 @@ describe("createFsMemory", () => {
   });
 
   test("compaction summarizes history into an assistant tool-call message", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
@@ -312,7 +316,7 @@ describe("createFsMemory", () => {
   });
 
   test("compaction no-op when context fits", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
@@ -345,7 +349,7 @@ describe("createFsMemory", () => {
   });
 
   test("rebuildActiveHistory resets active history to full history and clears compaction marker", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
@@ -382,7 +386,7 @@ describe("createFsMemory", () => {
   });
 
   test("concurrent saves preserve monotonic ordinal without data loss", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,
@@ -414,7 +418,7 @@ describe("createFsMemory", () => {
   });
 
   test("uses injected pricing calculator when cost is not provided", async () => {
-    const repo = createRepository({
+    const repo = await createRepository({
       calculateCost: ({ inputTokens, outputTokens }) =>
         (inputTokens + outputTokens) * 0.01,
     });
@@ -438,7 +442,7 @@ describe("createFsMemory", () => {
   });
 
   test("writes per-thread json file with schema versions", async () => {
-    const repo = createRepository();
+    const repo = await createRepository();
     const thread = await repo.createThread({
       userId: "user-1",
       modelSelection: defaultModelSelection,

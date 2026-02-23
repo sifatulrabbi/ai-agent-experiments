@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { safeValidateUIMessages, type UIMessage } from "ai";
 import { z } from "zod";
 import type { FileEntry, FS } from "@protean/vfs";
+import type { Logger } from "@protean/logger";
 
 import { createHistoryCompactor } from "./compaction";
 import { deriveActiveHistory } from "./derive-active-history";
@@ -122,13 +123,23 @@ export interface FsMemoryOptions {
  * serialised through an in-process write queue (`withLock`) to prevent
  * concurrent writes from producing corrupt files.
  */
-export function createFsMemory(options: FsMemoryOptions): AgentMemory {
+export async function createFsMemory(
+  options: FsMemoryOptions,
+  logger: Logger,
+): Promise<AgentMemory> {
   const fs = options.fs;
   const pricingCalculator = options.pricingCalculator;
   const rootDir = options.dirPath || ".threads";
   const compactor = createHistoryCompactor();
   // Single-entry async queue that serialises all write operations.
   let writeQueue: Promise<void> = Promise.resolve();
+
+  try {
+    await fs.mkdir(rootDir);
+  } catch (err) {
+    logger.error("Failed to prepare the fs-memory for the agent.", { err });
+    throw err;
+  }
 
   /**
    * Recomputes `usage` and `contextSize` from the thread's full `history`.

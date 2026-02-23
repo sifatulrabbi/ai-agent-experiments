@@ -4,7 +4,7 @@
  * Primary entry point:
  * ```ts
  * import { createFsMemory } from "@your-scope/agent-memory";
- * const memory = createFsMemory({ fs: yourFsAdapter });
+ * const memory = await createFsMemory({ fs: yourFsAdapter }, logger);
  * ```
  */
 export { ThreadMemoryError } from "./errors";

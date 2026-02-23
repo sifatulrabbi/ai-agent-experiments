@@ -16,8 +16,10 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
-	if err := godotenv.Load(); err != nil {
-		panic(err)
+	if os.Getenv("GOENV") != "production" {
+		if err := godotenv.Load(); err != nil {
+			panic(err)
+		}
 	}
 
 	port := os.Getenv("PORT")

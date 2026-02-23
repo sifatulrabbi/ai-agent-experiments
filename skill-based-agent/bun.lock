@@ -70,6 +70,7 @@
     "packages/agent-memory": {
       "name": "@protean/agent-memory",
       "dependencies": {
+        "@protean/logger": "workspace:*",
         "@protean/model-catalog": "workspace:*",
         "@protean/utils": "workspace:*",
         "@protean/vfs": "workspace:*",
