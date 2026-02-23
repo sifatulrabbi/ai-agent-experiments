@@ -15,7 +15,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     authorized({ auth }) {
-      return !!auth?.user;
+      const allowedUsersStr =
+        process.env.ALLOWED_ALPHA_USERS || "sifatuli.r@gmail.com";
+      const allowedUsers = allowedUsersStr.replaceAll(", ", ",").split(",");
+      return !!auth?.user?.email && allowedUsers.includes(auth.user.email);
     },
   },
 });
