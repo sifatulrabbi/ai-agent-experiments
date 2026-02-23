@@ -199,10 +199,8 @@ export async function POST(request: Request) {
 
   const compactionResult = await memory.compactIfNeeded(threadId, {
     policy: {
-      // maxContextTokens: fullModelEntry.contextLimits.total,
-      // reservedOutputTokens: fullModelEntry.contextLimits.maxOutput,
-      maxContextTokens: 5000,
-      reservedOutputTokens: 3000,
+      maxContextTokens: fullModelEntry.contextLimits.total,
+      reservedOutputTokens: fullModelEntry.contextLimits.maxOutput,
     },
     summarizeHistory: async (history) => summarizeHistory(history),
   });
