@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
@@ -172,11 +172,14 @@ export function useThreadChat({
   );
 
   const pendingPromptHandledThreadsRef = useRef(new Set<string>());
+  const [isPersistingMessageMutation, setIsPersistingMessageMutation] =
+    useState(false);
 
-  const { error, messages, regenerate, sendMessage, status, stop } = useChat({
-    messages: initialMessages,
-    transport,
-  });
+  const { error, messages, regenerate, sendMessage, setMessages, status, stop } =
+    useChat({
+      messages: initialMessages,
+      transport,
+    });
 
   useEffect(() => {
     if (!initialThreadId) return;
@@ -207,9 +210,16 @@ export function useThreadChat({
         return;
       }
 
+      const userMessage: UIMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        parts: [{ type: "text", text: trimmedText }],
+      };
+
       const store = useThreadUiStore.getState();
       if (!threadIdRef.current) {
         store.setIsCreatingThread(true);
+        setMessages((currentMessages) => [...currentMessages, userMessage]);
 
         try {
           const threadId = await createThread({
@@ -224,27 +234,44 @@ export function useThreadChat({
           router.replace(`/chats/t/${threadId}`);
           refreshSidebar();
           return;
+        } catch (error) {
+          setMessages((currentMessages) =>
+            currentMessages.filter((message) => message.id !== userMessage.id),
+          );
+          throw error;
         } finally {
           useThreadUiStore.getState().setIsCreatingThread(false);
         }
       }
 
-      const userMessage: UIMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        parts: [{ type: "text", text: trimmedText }],
-      };
+      setMessages((currentMessages) => [...currentMessages, userMessage]);
+      setIsPersistingMessageMutation(true);
+      let messagePersisted = false;
+      try {
+        await addMessage({
+          threadId: threadIdRef.current,
+          message: userMessage,
+          modelSelection: useThreadUiStore.getState().modelSelection,
+        });
+        messagePersisted = true;
 
-      await addMessage({
-        threadId: threadIdRef.current,
-        message: userMessage,
-        modelSelection: useThreadUiStore.getState().modelSelection,
-      });
-
-      await sendMessage({ text: trimmedText });
-      refreshSidebar();
+        await sendMessage({
+          messageId: userMessage.id,
+          text: trimmedText,
+        });
+        refreshSidebar();
+      } catch (error) {
+        if (!messagePersisted) {
+          setMessages((currentMessages) =>
+            currentMessages.filter((message) => message.id !== userMessage.id),
+          );
+        }
+        throw error;
+      } finally {
+        setIsPersistingMessageMutation(false);
+      }
     },
-    [addMessage, createThread, refreshSidebar, router, sendMessage],
+    [addMessage, createThread, refreshSidebar, router, sendMessage, setMessages],
   );
 
   const handleEditUserMessage = useCallback(
@@ -267,35 +294,40 @@ export function useThreadChat({
         return;
       }
 
-      const invocationModelSelection =
-        await applyInvocationModelSelection(modelSelection);
+      setIsPersistingMessageMutation(true);
+      try {
+        const invocationModelSelection =
+          await applyInvocationModelSelection(modelSelection);
 
-      const editedMessage: UIMessage = {
-        id: messageId,
-        role: "user",
-        parts: [{ type: "text", text: trimmedText }],
-      };
+        const editedMessage: UIMessage = {
+          id: messageId,
+          role: "user",
+          parts: [{ type: "text", text: trimmedText }],
+        };
 
-      await editMessage({
-        threadId,
-        messageId,
-        message: editedMessage,
-      });
-
-      await sendMessage(
-        {
+        await editMessage({
+          threadId,
           messageId,
-          text: trimmedText,
-        },
-        invocationModelSelection
-          ? {
-              body: {
-                modelSelection: invocationModelSelection,
-              },
-            }
-          : undefined,
-      );
-      refreshSidebar();
+          message: editedMessage,
+        });
+
+        await sendMessage(
+          {
+            messageId,
+            text: trimmedText,
+          },
+          invocationModelSelection
+            ? {
+                body: {
+                  modelSelection: invocationModelSelection,
+                },
+              }
+            : undefined,
+        );
+        refreshSidebar();
+      } finally {
+        setIsPersistingMessageMutation(false);
+      }
     },
     [applyInvocationModelSelection, editMessage, refreshSidebar, sendMessage],
   );
@@ -364,6 +396,10 @@ export function useThreadChat({
   const effectiveModelSelection = storeModelSelection.modelId
     ? storeModelSelection
     : initialSelection;
+  const effectiveStatus: ThreadStatus =
+    (isCreatingThread || isPersistingMessageMutation) && status === "ready"
+      ? "submitted"
+      : status;
 
   return {
     activeThreadId,
@@ -371,7 +407,7 @@ export function useThreadChat({
     isCreatingThread,
     messages,
     modelSelection: effectiveModelSelection,
-    status,
+    status: effectiveStatus,
     handleEditUserMessage,
     handleModelChange,
     handleRerunAssistantMessage,

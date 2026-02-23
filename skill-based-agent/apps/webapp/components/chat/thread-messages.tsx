@@ -35,6 +35,7 @@ import { ThreadMessageParts } from "@/components/chat/thread-message-parts";
 import { messageKeyFor } from "@/components/chat/thread-ui-shared";
 import { cn, formatCostUsd, formatTokenCount } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -65,6 +66,20 @@ function getMessageText(message: UIMessage): string {
     .map((part) => part.text)
     .join("\n")
     .trim();
+}
+
+function ThreadMessagesLoadingState() {
+  return (
+    <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border/70 bg-muted/20 px-6 py-10 text-center">
+      <Spinner className="size-5 text-muted-foreground" />
+      <div className="space-y-1">
+        <p className="font-medium text-sm">Preparing your conversation</p>
+        <p className="text-muted-foreground text-xs">
+          Creating thread and starting your request...
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export function ThreadMessages() {
@@ -289,11 +304,15 @@ export function ThreadMessages() {
       <Conversation className="min-h-0 flex-1">
         <ConversationContent>
           {messages.length === 0 ? (
-            <ConversationEmptyState
-              description="Send a message to start the conversation."
-              icon={<MessageSquareIcon className="size-6" />}
-              title="Start a conversation"
-            />
+            status === "submitted" ? (
+              <ThreadMessagesLoadingState />
+            ) : (
+              <ConversationEmptyState
+                description="Send a message to start the conversation."
+                icon={<MessageSquareIcon className="size-6" />}
+                title="Start a conversation"
+              />
+            )
           ) : (
             messages.map((message, messageIndex) => {
               const messageKey = messageKeyFor(message, messageIndex);
