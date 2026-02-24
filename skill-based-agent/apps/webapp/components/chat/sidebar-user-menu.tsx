@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronUpIcon, SettingsIcon, LayoutDashboardIcon } from "lucide-react";
+import { ChevronUpIcon, LayoutDashboardIcon, SettingsIcon } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,13 +12,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-interface SidebarUserMenuProps {
-  userName?: string | null;
-  userEmail?: string | null;
-}
-
-export function SidebarUserMenu({ userName, userEmail }: SidebarUserMenuProps) {
-  const label = userName?.trim() || userEmail || "Current user";
+export function SidebarUserMenu() {
+  const { data } = useSession();
+  const label = data?.user?.name?.trim() || data?.user?.email || "Current user";
 
   return (
     <DropdownMenu>

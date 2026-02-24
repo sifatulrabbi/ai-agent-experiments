@@ -1,9 +1,9 @@
 "use client";
 
-import { useThreadChatContext } from "@/components/chat/thread-chat-provider";
+import { useThreadSessionStore } from "@/components/chat/state/thread-session-store";
 
 export function ThreadErrorAlert() {
-  const { error } = useThreadChatContext();
+  const error = useThreadSessionStore((state) => state.error);
 
   if (!error) {
     return null;

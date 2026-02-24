@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   ArchiveIcon,
   MenuIcon,
@@ -12,7 +12,10 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import type { ThreadRecordTrimmed } from "@protean/agent-memory";
+import { useShallow } from "zustand/react/shallow";
 import { formatCostUsd, formatTokenCount } from "@/lib/utils";
+import { useThreadsSidebarActions } from "@/components/chat/actions/use-threads-sidebar-actions";
+import { useRenderCountDebug } from "@/components/chat/utils/use-render-count-debug";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarUserMenu } from "@/components/chat/sidebar-user-menu";
@@ -29,12 +32,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { useThreadApi } from "@/components/chat/use-thread-api";
+import { useThreadsSidebarStore } from "@/components/chat/state/threads-sidebar-store";
 
 interface ThreadsSidebarProps {
   threads: ThreadRecordTrimmed[];
-  userEmail?: string | null;
-  userName?: string | null;
 }
 
 const serverTimestampFormatter = new Intl.DateTimeFormat("en-US", {
@@ -62,61 +63,34 @@ function sanitizeIdSegment(value: string): string {
   return sanitized.length > 0 ? sanitized : "item";
 }
 
-export function ThreadsSidebar({
-  threads,
-  userEmail,
-  userName,
-}: ThreadsSidebarProps) {
-  const router = useRouter();
+export function ThreadsSidebar({ threads }: ThreadsSidebarProps) {
+  useRenderCountDebug("ThreadsSidebar");
+
   const pathname = usePathname();
-  const { deleteThread } = useThreadApi();
-  const [threadItems, setThreadItems] = useState(threads);
-  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const { deleteThreadItem, hydrateThreads, setMobileOpen, setMounted } =
+    useThreadsSidebarActions();
+
+  const { deletingThreadId, mobileOpen, mounted, threadItems } =
+    useThreadsSidebarStore(
+      useShallow((state) => ({
+        deletingThreadId: state.deletingThreadId,
+        mobileOpen: state.mobileOpen,
+        mounted: state.mounted,
+        threadItems: state.threadItems,
+      })),
+    );
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+  }, [setMounted]);
 
   useEffect(() => {
-    setThreadItems(threads);
-  }, [threads]);
+    hydrateThreads(threads);
+  }, [hydrateThreads, threads]);
 
-  // Close mobile sheet on navigation
   useEffect(() => {
     setMobileOpen(false);
-  }, [pathname]);
-
-  const handleDelete = useCallback(
-    async (threadId: string) => {
-      setDeletingThreadId(threadId);
-
-      try {
-        const deleted = await deleteThread(threadId);
-
-        if (!deleted) {
-          return;
-        }
-
-        setThreadItems((current) =>
-          current.filter((thread) => thread.id !== threadId),
-        );
-
-        startTransition(() => {
-          if (pathname === `/chats/t/${threadId}`) {
-            router.push("/chats/new");
-          }
-
-          router.refresh();
-        });
-      } finally {
-        setDeletingThreadId(null);
-      }
-    },
-    [deleteThread, pathname, router],
-  );
+  }, [pathname, setMobileOpen]);
 
   const renderSidebarContent = (menuScope: "desktop" | "mobile") => (
     <>
@@ -193,7 +167,7 @@ export function ThreadsSidebar({
                       <DropdownMenuItem
                         onSelect={(event) => {
                           event.preventDefault();
-                          void handleDelete(thread.id);
+                          void deleteThreadItem(thread.id);
                         }}
                         variant="destructive"
                       >
@@ -226,21 +200,18 @@ export function ThreadsSidebar({
       </ScrollArea>
 
       <div className="pt-3">
-        <SidebarUserMenu userEmail={userEmail} userName={userName} />
+        <SidebarUserMenu />
       </div>
     </>
   );
 
   return (
     <>
-      {/* Desktop sidebar */}
       <aside className="hidden h-screen w-72 flex-col border-r border-sidebar-border bg-sidebar p-3 min-[1440px]:flex">
         {renderSidebarContent("desktop")}
       </aside>
 
-      {/* Mobile toggle + sheet — client-only to avoid SSR double-rendering
-          sidebarContent which causes Radix ID hydration mismatches */}
-      {mounted && (
+      {mounted ? (
         <div className="fixed top-3 left-3 z-40 min-[1440px]:hidden">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
@@ -261,7 +232,7 @@ export function ThreadsSidebar({
             </SheetContent>
           </Sheet>
         </div>
-      )}
+      ) : null}
     </>
   );
 }

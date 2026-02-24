@@ -48,11 +48,11 @@ describe("createRemoteFs", () => {
       userId: "user-12345678",
     });
 
-    await expect(fs.readFile(".threads/thread.missing.json")).rejects.toMatchObject(
-      {
-        code: "ENOENT",
-      },
-    );
+    await expect(
+      fs.readFile(".threads/thread.missing.json"),
+    ).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 
   test("prepares workspace during initialization", async () => {

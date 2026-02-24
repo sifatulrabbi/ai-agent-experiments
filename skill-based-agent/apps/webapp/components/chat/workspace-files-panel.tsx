@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   ArrowLeftIcon,
   FileIcon,
@@ -8,6 +8,7 @@ import {
   RefreshCwIcon,
 } from "lucide-react";
 
+import { useWorkspaceFilesActions } from "@/components/chat/actions/use-workspace-files-actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,20 +21,19 @@ import { Input } from "@/components/ui/input";
 import {
   Sidebar,
   SidebarContent,
-  SidebarHeader,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarHeader,
   SidebarMenu,
-  SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { FileViewerDialog } from "@/components/chat/file-viewer-dialog";
 import {
   FileEntryContextMenu,
   type FileEntry,
 } from "@/components/chat/file-entry-context-menu";
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+import { useWorkspaceFilesStore } from "@/components/chat/state/workspace-files-store";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -41,38 +41,18 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function downloadFile(path: string, fileName: string) {
-  const a = document.createElement("a");
-  a.href = `/api/files/${encodeURIComponent(path)}`;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
-
-async function deleteEntry(path: string): Promise<boolean> {
-  const res = await fetch(`/api/files/${encodeURIComponent(path)}`, {
-    method: "DELETE",
-  });
-  return res.ok;
-}
-
-// ─── Rename Dialog ────────────────────────────────────────────────────────────
-
 interface RenameDialogProps {
   entry: FileEntry | null;
-  onConfirm: (newName: string) => void;
   onCancel: () => void;
+  onConfirm: (newName: string) => void;
 }
 
-function RenameDialog({ entry, onConfirm, onCancel }: RenameDialogProps) {
-  const [value, setValue] = useState("");
+function RenameDialog({ entry, onCancel, onConfirm }: RenameDialogProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (entry) {
-      setValue(entry.name);
-      // Select filename without extension for files
+      // Select filename without extension for files.
       setTimeout(() => {
         if (!inputRef.current) return;
         inputRef.current.focus();
@@ -87,7 +67,9 @@ function RenameDialog({ entry, onConfirm, onCancel }: RenameDialogProps) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const trimmed = value.trim();
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const rawValue = formData.get("newName");
+    const trimmed = typeof rawValue === "string" ? rawValue.trim() : "";
     if (trimmed && trimmed !== entry?.name) {
       onConfirm(trimmed);
     } else {
@@ -103,18 +85,16 @@ function RenameDialog({ entry, onConfirm, onCancel }: RenameDialogProps) {
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <Input
+            defaultValue={entry?.name ?? ""}
+            name="newName"
             ref={inputRef}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
             className="mt-1"
           />
           <DialogFooter className="mt-4">
             <Button type="button" variant="ghost" onClick={onCancel}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!value.trim()}>
-              Rename
-            </Button>
+            <Button type="submit">Rename</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -122,75 +102,41 @@ function RenameDialog({ entry, onConfirm, onCancel }: RenameDialogProps) {
   );
 }
 
-// ─── Main Panel ───────────────────────────────────────────────────────────────
-
 export function WorkspaceFilesPanel() {
-  const [currentDir, setCurrentDir] = useState("/");
-  const [entries, setEntries] = useState<FileEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [viewerFile, setViewerFile] = useState<FileEntry | null>(null);
-  const [renameEntry, setRenameEntry] = useState<FileEntry | null>(null);
+  const {
+    confirmRename,
+    deleteEntry,
+    downloadEntry,
+    openEntry,
+    refreshEntries,
+  } = useWorkspaceFilesActions();
 
-  const fetchEntries = useCallback(async (dir: string) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/files?dir=${encodeURIComponent(dir)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setEntries(data.entries ?? []);
-      } else {
-        setEntries([]);
-      }
-    } catch {
-      setEntries([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const currentDir = useWorkspaceFilesStore((state) => state.currentDir);
+  const entries = useWorkspaceFilesStore((state) => state.entries);
+  const error = useWorkspaceFilesStore((state) => state.error);
+  const loading = useWorkspaceFilesStore((state) => state.loading);
+  const viewerFile = useWorkspaceFilesStore((state) => state.viewerFile);
+  const renameEntry = useWorkspaceFilesStore((state) => state.renameEntry);
+  const navigateUp = useWorkspaceFilesStore((state) => state.navigateUp);
+  const openRename = useWorkspaceFilesStore((state) => state.openRename);
+  const closeRename = useWorkspaceFilesStore((state) => state.closeRename);
+  const closeViewer = useWorkspaceFilesStore((state) => state.closeViewer);
 
   useEffect(() => {
-    fetchEntries(currentDir);
-  }, [currentDir, fetchEntries]);
-
-  const navigateUp = useCallback(() => {
-    if (currentDir === "/") return;
-    const parts = currentDir.split("/").filter(Boolean);
-    parts.pop();
-    setCurrentDir(parts.length > 0 ? parts.join("/") : "/");
-  }, [currentDir]);
-
-  // ─── Action handlers ──────────────────────────────────────────────────────
+    void refreshEntries(currentDir);
+  }, [currentDir, refreshEntries]);
 
   function handleOpen(entry: FileEntry) {
-    if (entry.isDirectory) {
-      setCurrentDir(entry.path);
-    } else {
-      setViewerFile(entry);
-    }
+    openEntry(entry);
   }
 
-  function handleDownload(entry: FileEntry) {
-    downloadFile(entry.path, entry.name);
-  }
-
-  function handleAddToChat(_entry: FileEntry) {
-    // TODO: implement add-to-chat
-  }
-
-  async function handleDelete(entry: FileEntry) {
-    const ok = await deleteEntry(entry.path);
-    if (ok) fetchEntries(currentDir);
+  function handleAddToChat(entry: FileEntry) {
+    void entry;
+    // TODO: implement add-to-chat.
   }
 
   function handleRenameRequest(entry: FileEntry) {
-    setRenameEntry(entry);
-  }
-
-  async function handleRenameConfirm(newName: string) {
-    if (!renameEntry) return;
-    const ok = await renameEntryApi(renameEntry.path, newName);
-    setRenameEntry(null);
-    if (ok) fetchEntries(currentDir);
+    openRename(entry);
   }
 
   return (
@@ -216,7 +162,9 @@ export function WorkspaceFilesPanel() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => fetchEntries(currentDir)}
+              onClick={() => {
+                void refreshEntries(currentDir);
+              }}
               className="size-7 p-0"
             >
               <RefreshCwIcon className="size-4" />
@@ -234,6 +182,12 @@ export function WorkspaceFilesPanel() {
                 </p>
               )}
 
+              {error ? (
+                <p className="px-2 py-3 text-center text-destructive text-xs">
+                  {error}
+                </p>
+              ) : null}
+
               {!loading && entries.length === 0 && (
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   No files found
@@ -247,9 +201,11 @@ export function WorkspaceFilesPanel() {
                       <FileEntryContextMenu
                         entry={entry}
                         onOpen={handleOpen}
-                        onDownload={handleDownload}
+                        onDownload={downloadEntry}
                         onAddToChat={handleAddToChat}
-                        onDelete={handleDelete}
+                        onDelete={(nextEntry) => {
+                          void deleteEntry(nextEntry);
+                        }}
                         onRename={handleRenameRequest}
                       >
                         <SidebarMenuButton onClick={() => handleOpen(entry)}>
@@ -259,11 +215,11 @@ export function WorkspaceFilesPanel() {
                             <FileIcon className="size-4" />
                           )}
                           <span className="truncate">{entry.name}</span>
-                          {!entry.isDirectory && (
+                          {!entry.isDirectory ? (
                             <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                               {formatBytes(entry.size)}
                             </span>
-                          )}
+                          ) : null}
                         </SidebarMenuButton>
                       </FileEntryContextMenu>
                     </SidebarMenuItem>
@@ -277,25 +233,18 @@ export function WorkspaceFilesPanel() {
 
       <FileViewerDialog
         open={viewerFile !== null}
-        onOpenChange={(open) => !open && setViewerFile(null)}
+        onOpenChange={(open) => !open && closeViewer()}
         fileName={viewerFile?.name ?? ""}
         filePath={viewerFile?.path ?? ""}
       />
 
       <RenameDialog
         entry={renameEntry}
-        onConfirm={handleRenameConfirm}
-        onCancel={() => setRenameEntry(null)}
+        onConfirm={(newName) => {
+          void confirmRename(newName);
+        }}
+        onCancel={closeRename}
       />
     </>
   );
-}
-
-async function renameEntryApi(path: string, newName: string): Promise<boolean> {
-  const res = await fetch(`/api/files/${encodeURIComponent(path)}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ newName }),
-  });
-  return res.ok;
 }

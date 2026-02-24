@@ -24,11 +24,7 @@ export default async function ChatsLayout({
 
   return (
     <div className="flex min-h-screen">
-      <ThreadsSidebar
-        threads={threads}
-        userEmail={session.user.email}
-        userName={session.user.name}
-      />
+      <ThreadsSidebar threads={threads} />
 
       <main className="min-w-0 flex-1">
         <div className="flex h-screen min-h-0 flex-col bg-background">

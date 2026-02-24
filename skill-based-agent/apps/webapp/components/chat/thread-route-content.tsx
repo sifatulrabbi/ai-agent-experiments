@@ -8,7 +8,7 @@ import type {
 } from "@protean/model-catalog";
 import type { ThreadUsage } from "@protean/agent-memory";
 import { ModelCatalogProvider } from "@/components/chat/model-catalog-provider";
-import { ThreadChatProvider } from "@/components/chat/thread-chat-provider";
+import { ThreadRuntimeController } from "@/components/chat/thread-runtime-controller";
 import { ThreadErrorAlert } from "@/components/chat/thread-error-alert";
 import { ThreadHeader } from "@/components/chat/thread-header";
 import { ThreadMessages } from "@/components/chat/thread-messages";
@@ -35,30 +35,29 @@ export function ThreadRouteContent({
 }: ThreadRouteContentProps) {
   return (
     <ModelCatalogProvider providers={providers}>
-      <ThreadChatProvider
+      <ThreadRuntimeController
         defaultModelSelection={defaultModelSelection}
         initialMessageUsageMap={initialMessageUsageMap}
         initialMessages={initialMessages}
         initialModelSelection={initialModelSelection}
         initialThreadId={initialThreadId}
         providers={providers}
+      />
+      <SidebarProvider
+        className="!min-h-0 h-full"
+        defaultOpen={true}
+        style={{ "--sidebar-width": "20rem" } as React.CSSProperties}
       >
-        <SidebarProvider
-          className="!min-h-0 h-full"
-          defaultOpen={true}
-          style={{ "--sidebar-width": "20rem" } as React.CSSProperties}
-        >
-          <SidebarInset>
-            <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
-              <ThreadHeader />
-              <ThreadMessages />
-              <ThreadErrorAlert />
-              <ThreadPromptInput />
-            </div>
-          </SidebarInset>
-          <WorkspaceFilesPanel />
-        </SidebarProvider>
-      </ThreadChatProvider>
+        <SidebarInset>
+          <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
+            <ThreadHeader />
+            <ThreadMessages />
+            <ThreadErrorAlert />
+            <ThreadPromptInput />
+          </div>
+        </SidebarInset>
+        <WorkspaceFilesPanel />
+      </SidebarProvider>
     </ModelCatalogProvider>
   );
 }

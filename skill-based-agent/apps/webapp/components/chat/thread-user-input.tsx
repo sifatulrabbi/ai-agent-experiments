@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   CheckIcon,
   PaperclipIcon,
@@ -10,7 +10,13 @@ import {
 import { getModelById } from "@protean/model-catalog";
 import { useModelCatalog } from "@/components/chat/model-catalog-provider";
 import { ModelSelectorDropdown } from "@/components/chat/model-selector-dropdown";
-import { useThreadChatContext } from "@/components/chat/thread-chat-provider";
+import { useThreadActions } from "@/components/chat/actions/use-thread-actions";
+import { useComposerStore } from "@/components/chat/state/composer-store";
+import {
+  selectIsBusy,
+  useThreadSessionStore,
+} from "@/components/chat/state/thread-session-store";
+import { useRenderCountDebug } from "@/components/chat/utils/use-render-count-debug";
 import {
   PromptInput,
   PromptInputBody,
@@ -38,7 +44,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useThreadUiStore } from "@/components/chat/thread-ui-store";
 
 function PromptActionRow({
   children,
@@ -56,30 +61,28 @@ function PromptActionRow({
 }
 
 export function ThreadPromptInput() {
-  const {
-    handleModelChange: onModelChange,
-    handleReasoningBudgetChange: onReasoningBudgetChange,
-    handleSubmit: onSubmit,
-    isCreatingThread,
-    modelSelection,
-    status,
-    stop: onStop,
-  } = useThreadChatContext();
+  useRenderCountDebug("ThreadPromptInput");
+
+  const { changeModel, changeReasoningBudget, stop, submitPrompt } =
+    useThreadActions();
   const providers = useModelCatalog();
-  const disabled =
-    isCreatingThread || status === "streaming" || status === "submitted";
-  const isDeepResearchEnabled = useThreadUiStore(
+
+  const modelSelection = useComposerStore((state) => state.modelSelection);
+  const isDeepResearchEnabled = useComposerStore(
     (state) => state.deepResearchEnabled,
   );
-  const isImageCreationEnabled = useThreadUiStore(
+  const isImageCreationEnabled = useComposerStore(
     (state) => state.imageCreationEnabled,
   );
-  const setDeepResearchEnabled = useThreadUiStore(
-    (state) => state.setDeepResearchEnabled,
+  const toggleDeepResearch = useComposerStore(
+    (state) => state.toggleDeepResearch,
   );
-  const setImageCreationEnabled = useThreadUiStore(
-    (state) => state.setImageCreationEnabled,
+  const toggleImageCreation = useComposerStore(
+    (state) => state.toggleImageCreation,
   );
+
+  const status = useThreadSessionStore((state) => state.status);
+  const isBusy = useThreadSessionStore(selectIsBusy);
 
   const selectedModel = useMemo(
     () =>
@@ -98,24 +101,16 @@ export function ThreadPromptInput() {
     (budget) => budget !== "none",
   );
 
-  useEffect(() => {
-    if (!selectedModel) {
-      return;
-    }
-
-    if (
-      !selectedModel.reasoning.budgets.includes(modelSelection.reasoningBudget)
-    ) {
-      onReasoningBudgetChange(selectedModel.reasoning.defaultValue);
-    }
-  }, [onReasoningBudgetChange, selectedModel, modelSelection.reasoningBudget]);
-
   return (
     <div className="sticky bottom-0 bg-background pt-2 pb-4">
-      <PromptInput onSubmit={onSubmit}>
+      <PromptInput
+        onSubmit={async (message) => {
+          await submitPrompt({ text: message.text });
+        }}
+      >
         <PromptInputBody>
           <PromptInputTextarea
-            disabled={disabled}
+            disabled={isBusy}
             placeholder="Ask anything..."
           />
         </PromptInputBody>
@@ -139,13 +134,13 @@ export function ThreadPromptInput() {
                   <PromptActionRow label="Deep Research">
                     <Switch
                       checked={isDeepResearchEnabled}
-                      onCheckedChange={setDeepResearchEnabled}
+                      onCheckedChange={toggleDeepResearch}
                     />
                   </PromptActionRow>
                   <PromptActionRow label="Image creation">
                     <Switch
                       checked={isImageCreationEnabled}
-                      onCheckedChange={setImageCreationEnabled}
+                      onCheckedChange={toggleImageCreation}
                     />
                   </PromptActionRow>
                 </div>
@@ -153,9 +148,9 @@ export function ThreadPromptInput() {
             </Popover>
 
             <ModelSelectorDropdown
-              disabled={disabled}
+              disabled={isBusy}
               maxLabelLength={28}
-              onChange={onModelChange}
+              onChange={changeModel}
               triggerMode="pill"
               value={modelSelection}
             />
@@ -166,7 +161,6 @@ export function ThreadPromptInput() {
                   <DropdownMenuTrigger asChild>
                     <Button
                       className="h-8 w-8 px-0 sm:hidden"
-                      disabled={disabled}
                       size="sm"
                       type="button"
                       variant="outline"
@@ -179,7 +173,7 @@ export function ThreadPromptInput() {
                       <DropdownMenuItem
                         className="flex items-center justify-between gap-2"
                         key={budget}
-                        onSelect={() => onReasoningBudgetChange(budget)}
+                        onSelect={() => changeReasoningBudget(budget)}
                       >
                         <span>
                           {budget === "none"
@@ -195,10 +189,7 @@ export function ThreadPromptInput() {
                 </DropdownMenu>
 
                 <Select
-                  disabled={disabled}
-                  onValueChange={(value) =>
-                    onReasoningBudgetChange(value as string)
-                  }
+                  onValueChange={(value) => changeReasoningBudget(value)}
                   value={modelSelection.reasoningBudget}
                 >
                   <SelectTrigger
@@ -222,11 +213,7 @@ export function ThreadPromptInput() {
             ) : null}
           </div>
 
-          <PromptInputSubmit
-            disabled={disabled}
-            onStop={onStop}
-            status={status}
-          />
+          <PromptInputSubmit disabled={isBusy} onStop={stop} status={status} />
         </PromptInputFooter>
       </PromptInput>
     </div>
