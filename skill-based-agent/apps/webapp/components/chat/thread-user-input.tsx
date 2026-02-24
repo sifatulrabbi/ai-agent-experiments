@@ -166,6 +166,7 @@ export function ThreadPromptInput() {
                   <DropdownMenuTrigger asChild>
                     <Button
                       className="h-8 w-8 px-0 sm:hidden"
+                      disabled={disabled}
                       size="sm"
                       type="button"
                       variant="outline"
@@ -194,6 +195,7 @@ export function ThreadPromptInput() {
                 </DropdownMenu>
 
                 <Select
+                  disabled={disabled}
                   onValueChange={(value) =>
                     onReasoningBudgetChange(value as string)
                   }

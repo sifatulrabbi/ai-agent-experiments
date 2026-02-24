@@ -248,7 +248,6 @@ export function getModelCatalog(): AIModelProviderEntry[] {
 
 export function getDefaultModelSelection(): ModelSelection {
   const modelsOfChoice = [
-    "arcee-ai/trinity-large-preview:free",
     "stepfun/step-3.5-flash:free",
     "stepfun/step-3.5-flash",
   ];

@@ -186,6 +186,11 @@ function isWebToolName(toolName: string): boolean {
   );
 }
 
+function isSkillToolName(toolName: string): boolean {
+  const normalized = toolName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return normalized === "skill";
+}
+
 function isFileToolName(toolName: string): boolean {
   const normalized = toolName.toLowerCase().replace(/[^a-z0-9]/g, "");
   const workspaceToolNames = new Set([
@@ -277,6 +282,11 @@ function getGoalDescription(toolPart: ThreadToolPart): string | null {
     if (goal) return `Goal: ${toSingleLine(goal)}`;
     const fallback = toCompactJson(input);
     return fallback ? `Input: ${toSingleLine(fallback)}` : null;
+  }
+
+  if (isSkillToolName(toolName)) {
+    const skillId = stringOrNull(input.id);
+    if (skillId) return toSingleLine(skillId);
   }
 
   const normalized = toolName.toLowerCase().replace(/[^a-z0-9]/g, "");

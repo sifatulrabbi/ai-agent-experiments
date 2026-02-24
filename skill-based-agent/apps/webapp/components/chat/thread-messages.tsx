@@ -389,6 +389,7 @@ export function ThreadMessages() {
                               </DropdownMenu>
 
                               <Select
+                                disabled={isBusy}
                                 onValueChange={(value) =>
                                   setEditReasoningBudget(value)
                                 }
