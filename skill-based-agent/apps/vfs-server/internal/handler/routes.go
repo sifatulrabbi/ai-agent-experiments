@@ -12,7 +12,7 @@ import (
 // NewRouter creates the chi router with all VFS routes.
 func NewRouter(workspaceBase string, tokens map[string]string) chi.Router {
 	r := chi.NewRouter()
-	locker := fsops.NewUserLocker()
+	locker := fsops.NewPathLocker()
 
 	// Health check — outside auth group
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {

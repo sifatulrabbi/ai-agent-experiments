@@ -206,6 +206,18 @@ export async function createRemoteFs(config: RemoteFsConfig): Promise<FS> {
       }
     },
 
+    move: async (sourcePath, destinationPath) => {
+      logger?.debug("RemoteFS.move", { sourcePath, destinationPath });
+      await fetchJson(`${base}/api/v1/files/rename`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: normalizePath(sourcePath),
+          newPath: normalizePath(destinationPath),
+        }),
+      });
+    },
+
     remove: async (fullPath) => {
       logger?.debug("RemoteFS.remove", { fullPath });
       const q = encodeURIComponent(normalizePath(fullPath));

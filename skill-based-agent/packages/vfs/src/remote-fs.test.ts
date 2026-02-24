@@ -97,4 +97,44 @@ describe("createRemoteFs", () => {
 
     await expect(fs.readdir(".")).resolves.toEqual([]);
   });
+
+  test("uses rename endpoint for move with normalized paths", async () => {
+    const calls: Array<{ url: string; method: string; body?: string }> = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const body = typeof init?.body === "string" ? init.body : undefined;
+      calls.push({ url, method, body });
+
+      if (url.endsWith("/api/v1/files/mkdir")) {
+        return jsonResponse(200, { ok: true, data: { created: true } });
+      }
+
+      if (url.endsWith("/api/v1/files/rename")) {
+        return jsonResponse(200, { ok: true, data: { renamed: true } });
+      }
+
+      return jsonResponse(500, {
+        ok: false,
+        error: {
+          code: "INTERNAL",
+          message: `unexpected call: ${url} ${method}`,
+        },
+      });
+    }) as typeof fetch;
+
+    const fs = await createRemoteFs({
+      baseUrl: "http://vfs.example",
+      serviceToken: "token",
+      userId: "user-12345678",
+    });
+
+    await fs.move("docs\\old.txt", "/archive/new.txt");
+
+    const moveCall = calls.find((c) => c.url.endsWith("/api/v1/files/rename"));
+    expect(moveCall).toBeDefined();
+    expect(moveCall?.method).toBe("PATCH");
+    expect(moveCall?.body).toContain('"path":"docs/old.txt"');
+    expect(moveCall?.body).toContain('"newPath":"archive/new.txt"');
+  });
 });

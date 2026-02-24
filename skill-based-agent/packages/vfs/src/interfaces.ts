@@ -21,6 +21,7 @@ export interface FS {
     filePath: string,
     content: Buffer | Uint8Array,
   ): Promise<void>;
+  move(sourcePath: string, destinationPath: string): Promise<void>;
   remove(fullPath: string): Promise<void>;
   /** Resolve a workspace-relative path to an absolute filesystem path. */
   resolvePath(filePath: string): string;

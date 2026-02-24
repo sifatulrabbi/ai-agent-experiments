@@ -15,7 +15,7 @@ type writeFileRequest struct {
 	Content string `json:"content"`
 }
 
-func WriteFile(workspaceBase string, locker *fsops.UserLocker) http.HandlerFunc {
+func WriteFile(workspaceBase string, locker *fsops.PathLocker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := middleware.GetUserID(r.Context())
 		root := filepath.Join(workspaceBase, userID)
@@ -32,8 +32,8 @@ func WriteFile(workspaceBase string, locker *fsops.UserLocker) http.HandlerFunc 
 			return
 		}
 
-		locker.Lock(userID)
-		defer locker.Unlock(userID)
+		unlock := locker.LockExact(resolved)
+		defer unlock()
 
 		// Auto-create parent directories
 		if err := os.MkdirAll(filepath.Dir(resolved), 0755); err != nil {

@@ -14,7 +14,7 @@ type mkdirRequest struct {
 	Path string `json:"path"`
 }
 
-func MkDir(workspaceBase string, locker *fsops.UserLocker) http.HandlerFunc {
+func MkDir(workspaceBase string, locker *fsops.PathLocker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := middleware.GetUserID(r.Context())
 		root := filepath.Join(workspaceBase, userID)
@@ -31,8 +31,8 @@ func MkDir(workspaceBase string, locker *fsops.UserLocker) http.HandlerFunc {
 			return
 		}
 
-		locker.Lock(userID)
-		defer locker.Unlock(userID)
+		unlock := locker.LockExact(resolved)
+		defer unlock()
 
 		if err := os.MkdirAll(resolved, 0o755); err != nil {
 			fsops.WriteError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
