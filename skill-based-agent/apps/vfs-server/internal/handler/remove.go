@@ -9,7 +9,7 @@ import (
 	"github.com/protean/vfs-server/internal/middleware"
 )
 
-func Remove(workspaceBase string, locker *fsops.UserLocker) http.HandlerFunc {
+func Remove(workspaceBase string, locker *fsops.PathLocker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := middleware.GetUserID(r.Context())
 		root := filepath.Join(workspaceBase, userID)
@@ -21,8 +21,8 @@ func Remove(workspaceBase string, locker *fsops.UserLocker) http.HandlerFunc {
 			return
 		}
 
-		locker.Lock(userID)
-		defer locker.Unlock(userID)
+		unlock := locker.LockSubtree(resolved)
+		defer unlock()
 
 		if err := os.RemoveAll(resolved); err != nil {
 			if os.IsNotExist(err) {

@@ -32,6 +32,11 @@ Creates a directory at the given path, including any missing intermediate direct
 Writes text content to a file. Creates the file if it doesn't exist, overwrites if it does.
 Always confirm with the user before overwriting existing files.
 
+### Move
+
+Move or rename a file or directory from one path to another path.
+Use this when reorganizing files or renaming existing paths.
+
 ### Remove
 
 Remove either a directory or file from the workspace.
@@ -41,4 +46,5 @@ Remove either a directory or file from the workspace.
 - Read before you write: inspect existing files before modifying them.
 - Use GetFileStat to check size before reading large files.
 - Prefer ReadDir when you need to tell files from directories.
+- Use Move for renaming or relocating existing files/directories instead of re-writing content.
 - Never write to paths outside the workspace root.`;

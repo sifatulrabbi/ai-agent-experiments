@@ -1,4 +1,12 @@
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "fs/promises";
 import { resolve, relative, sep, normalize } from "path";
 import { type Logger } from "@protean/logger";
 
@@ -128,6 +136,17 @@ export async function createLocalFs(
       await withWriteLock(async () => {
         const resolvedPath = resolveWithinRoot(root, fullPath);
         await rm(resolvedPath, { recursive: true, force: true });
+      });
+    },
+
+    move: async (sourcePath, destinationPath) => {
+      logger?.debug("FS.move", { sourcePath, destinationPath });
+      await withWriteLock(async () => {
+        const sourceResolvedPath = resolveWithinRoot(root, sourcePath);
+        const { resolvedPath: destinationResolvedPath, parentPath } =
+          resolveWritablePath(destinationPath);
+        await mkdir(parentPath, { recursive: true });
+        await rename(sourceResolvedPath, destinationResolvedPath);
       });
     },
   };

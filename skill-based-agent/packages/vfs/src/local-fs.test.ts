@@ -131,6 +131,38 @@ describe("createLocalFs", () => {
     });
   });
 
+  describe("move", () => {
+    test("moves a file to a new location and creates parent directories", async () => {
+      await fs.writeFile("source/file.txt", "hello");
+
+      await fs.move("source/file.txt", "dest/nested/file-renamed.txt");
+
+      await expect(fs.readFile("source/file.txt")).rejects.toThrow();
+      await expect(fs.readFile("dest/nested/file-renamed.txt")).resolves.toBe(
+        "hello",
+      );
+    });
+
+    test("moves a directory recursively", async () => {
+      await fs.writeFile("from/sub/a.txt", "a");
+      await fs.writeFile("from/sub/b.txt", "b");
+
+      await fs.move("from", "to/deep/from");
+
+      await expect(fs.readdir("from")).rejects.toThrow();
+      await expect(fs.readFile("to/deep/from/sub/a.txt")).resolves.toBe("a");
+      await expect(fs.readFile("to/deep/from/sub/b.txt")).resolves.toBe("b");
+    });
+
+    test("rejects destination paths that escape the root", async () => {
+      await fs.writeFile("safe.txt", "safe");
+
+      await expect(fs.move("safe.txt", "../outside.txt")).rejects.toThrow(
+        /escapes workspace root/,
+      );
+    });
+  });
+
   describe("write lock", () => {
     test("applies queued writes in call order", async () => {
       const first = fs.writeFile("ordered.txt", "first");
@@ -152,6 +184,18 @@ describe("createLocalFs", () => {
 
       const content = await fs.readFile("race.txt");
       expect(content).toBe("two");
+    });
+
+    test("serializes mixed move/write operations", async () => {
+      await fs.writeFile("moves/source.txt", "first");
+
+      const m1 = fs.move("moves/source.txt", "moves/dest.txt");
+      const w1 = fs.writeFile("moves/dest.txt", "second");
+
+      await Promise.all([m1, w1]);
+
+      const content = await fs.readFile("moves/dest.txt");
+      expect(content).toBe("second");
     });
 
     test("releases lock when a queued write fails", async () => {

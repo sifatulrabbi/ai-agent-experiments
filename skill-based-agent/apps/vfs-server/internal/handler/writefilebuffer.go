@@ -10,7 +10,7 @@ import (
 	"github.com/protean/vfs-server/internal/middleware"
 )
 
-func WriteFileBinary(workspaceBase string, locker *fsops.UserLocker) http.HandlerFunc {
+func WriteFileBinary(workspaceBase string, locker *fsops.PathLocker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := middleware.GetUserID(r.Context())
 		root := filepath.Join(workspaceBase, userID)
@@ -46,8 +46,8 @@ func WriteFileBinary(workspaceBase string, locker *fsops.UserLocker) http.Handle
 			return
 		}
 
-		locker.Lock(userID)
-		defer locker.Unlock(userID)
+		unlock := locker.LockExact(resolved)
+		defer unlock()
 
 		if err := os.MkdirAll(filepath.Dir(resolved), 0755); err != nil {
 			fsops.WriteError(w, http.StatusInternalServerError, "INTERNAL", err.Error())

@@ -9,7 +9,7 @@ import (
 	"github.com/protean/vfs-server/internal/middleware"
 )
 
-func ReadDir(workspaceBase string, locker *fsops.UserLocker) http.HandlerFunc {
+func ReadDir(workspaceBase string, _ *fsops.PathLocker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := middleware.GetUserID(r.Context())
 		root := filepath.Join(workspaceBase, userID)
@@ -20,9 +20,6 @@ func ReadDir(workspaceBase string, locker *fsops.UserLocker) http.HandlerFunc {
 			fsops.WriteError(w, http.StatusForbidden, "PATH_TRAVERSAL", err.Error())
 			return
 		}
-
-		locker.RLock(userID)
-		defer locker.RUnlock(userID)
 
 		entries, err := os.ReadDir(resolved)
 		if err != nil {

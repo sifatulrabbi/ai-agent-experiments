@@ -32,6 +32,7 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
       GetFileContent: this.GetFileContent,
       CreateDirectory: this.CreateDirectory,
       WriteFile: this.WriteFile,
+      Move: this.Move,
       Remove: this.Remove,
     };
   }
@@ -226,6 +227,48 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
       }
 
       return { error: null, fullPath, removed: true };
+    },
+  });
+
+  Move = tool({
+    description:
+      "Move or rename a file or directory from one path to another path.",
+    inputSchema: z.object({
+      sourceFullPath: z
+        .string()
+        .describe("Current path of the file or directory."),
+      destinationFullPath: z
+        .string()
+        .describe("Destination path for the file or directory."),
+    }),
+    execute: async ({ sourceFullPath, destinationFullPath }) => {
+      this.dependencies.logger.debug('Running workspace operation "Move"', {
+        sourcePath: sourceFullPath,
+        destinationPath: destinationFullPath,
+      });
+      const { error } = await tryCatch(() =>
+        this.dependencies.fsClient.move(sourceFullPath, destinationFullPath),
+      );
+      if (error) {
+        this.logger.error('Workspace operation "Move" failed', {
+          sourcePath: sourceFullPath,
+          destinationPath: destinationFullPath,
+          error,
+        });
+        return {
+          error: `Workspace operation "Move" failed for source "${sourceFullPath}" to destination "${destinationFullPath}": ${error.message || "Unknown filesystem error"}`,
+          sourceFullPath,
+          destinationFullPath,
+          moved: false,
+        };
+      }
+
+      return {
+        error: null,
+        sourceFullPath,
+        destinationFullPath,
+        moved: true,
+      };
     },
   });
 }
