@@ -9,7 +9,7 @@ import (
 	"github.com/protean/vfs-server/internal/middleware"
 )
 
-func ReadDir(workspaceBase string, _ *fsops.PathLocker) http.HandlerFunc {
+func ListDir(workspaceBase string, _ *fsops.PathLocker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := middleware.GetUserID(r.Context())
 		root := filepath.Join(workspaceBase, userID)

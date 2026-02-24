@@ -13,7 +13,7 @@ Follow these phases sequentially. Do not skip phases.
 You are the **coordinator**. Sub-agents are **workers**.
 
 Workers are fully capable agents. They have:
-- All workspace tools (GetFileStat, ReadDir, GetFileContent, CreateDirectory, WriteFile, Remove)
+- All workspace tools (Stat, ListDir, ReadFile, Mkdir, WriteFile, Move, Remove)
 - All web search tools (WebSearchGeneral, WebSearchNews, WebFetchUrlContent)
 - The Skill tool — they can load any skill (e.g., docx-skill for document analysis)
 - **SpawnSubAgent** — workers can spawn their own sub-agents (up to 3 levels deep total). This enables hierarchical delegation: you spawn a coordinator-worker, and it fans out to its own workers.

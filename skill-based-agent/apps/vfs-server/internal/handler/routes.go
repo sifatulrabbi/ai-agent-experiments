@@ -26,7 +26,7 @@ func NewRouter(workspaceBase string, tokens map[string]string) chi.Router {
 		r.Use(middleware.UserContext(workspaceBase))
 
 		r.Get("/api/v1/files/stat", Stat(workspaceBase, locker))
-		r.Get("/api/v1/files/readdir", ReadDir(workspaceBase, locker))
+		r.Get("/api/v1/files/readdir", ListDir(workspaceBase, locker))
 		r.Get("/api/v1/files/read", ReadFile(workspaceBase, locker))
 		r.Get("/api/v1/files/read-binary", ReadFileBinary(workspaceBase, locker))
 

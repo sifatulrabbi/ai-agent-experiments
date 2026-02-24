@@ -27,19 +27,19 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
 
   get tools() {
     return {
-      GetFileStat: this.GetFileStat,
-      ReadDir: this.ReadDir,
-      GetFileContent: this.GetFileContent,
-      CreateDirectory: this.CreateDirectory,
+      Stat: this.Stat,
+      ListDir: this.ListDir,
+      ReadFile: this.ReadFile,
+      Mkdir: this.Mkdir,
       WriteFile: this.WriteFile,
       Move: this.Move,
       Remove: this.Remove,
     };
   }
 
-  GetFileStat = tool({
+  Stat = tool({
     description:
-      "Get metadata (size, type, timestamps) for a single file or directory. Includes totalLines for files.",
+      "Get metadata (size, type, timestamps) for files/directories.",
     inputSchema: z.object({
       fullPath: z
         .string()
@@ -47,7 +47,7 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
     }),
     execute: async ({ fullPath }) => {
       this.dependencies.logger.debug(
-        'Running workspace operation "GetFileStat"',
+        'Running workspace operation "Stat"',
         { path: fullPath },
       );
       const { result, error } = await tryCatch(async () => {
@@ -63,12 +63,12 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
         };
       });
       if (error) {
-        this.logger.error('Workspace operation "GetFileStat" failed', {
+        this.logger.error('Workspace operation "Stat" failed', {
           path: fullPath,
           error,
         });
         return {
-          error: `Workspace operation "GetFileStat" failed for path "${fullPath}": ${error.message || "Unknown filesystem error"}`,
+          error: `Workspace operation "Stat" failed for path "${fullPath}": ${error.message || "Unknown filesystem error"}`,
           fullPath,
         };
       }
@@ -77,26 +77,26 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
     },
   });
 
-  ReadDir = tool({
+  ListDir = tool({
     description:
-      "Read directory entries with their types. Returns an array of objects with name and isDirectory fields.",
+      "List directory entries.",
     inputSchema: z.object({
       fullPath: z.string().describe("Path to the directory to read."),
     }),
     execute: async ({ fullPath }) => {
-      this.dependencies.logger.debug('Running workspace operation "ReadDir"', {
+      this.dependencies.logger.debug('Running workspace operation "ListDir"', {
         path: fullPath,
       });
       const { result, error } = await tryCatch(() =>
         this.dependencies.fsClient.readdir(fullPath),
       );
       if (error) {
-        this.logger.error('Workspace operation "ReadDir" failed', {
+        this.logger.error('Workspace operation "ListDir" failed', {
           path: fullPath,
           error,
         });
         return {
-          error: `Workspace operation "ReadDir" failed for path "${fullPath}": ${error.message || "Unknown filesystem error"}`,
+          error: `Workspace operation "ListDir" failed for path "${fullPath}": ${error.message || "Unknown filesystem error"}`,
           fullPath,
         };
       }
@@ -105,27 +105,27 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
     },
   });
 
-  GetFileContent = tool({
+  ReadFile = tool({
     description:
-      "Read the full text content of a file. Only use on text-based files.",
+      "Read file contents.",
     inputSchema: z.object({
       fullPath: z.string().describe("Path to the file to read."),
     }),
     execute: async ({ fullPath }) => {
       this.dependencies.logger.debug(
-        'Running workspace operation "GetFileContent"',
+        'Running workspace operation "ReadFile"',
         { path: fullPath },
       );
       const { result, error } = await tryCatch(() =>
         this.dependencies.fsClient.readFile(fullPath),
       );
       if (error) {
-        this.logger.error('Workspace operation "GetFileContent" failed', {
+        this.logger.error('Workspace operation "ReadFile" failed', {
           path: fullPath,
           error,
         });
         return {
-          error: `Workspace operation "GetFileContent" failed for path "${fullPath}": ${error.message || "Unknown filesystem error"}`,
+          error: `Workspace operation "ReadFile" failed for path "${fullPath}": ${error.message || "Unknown filesystem error"}`,
           fullPath,
         };
       }
@@ -134,27 +134,27 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
     },
   });
 
-  CreateDirectory = tool({
+  Mkdir = tool({
     description:
-      "Create a directory (including intermediate directories) at the given path.",
+      "Create directories.",
     inputSchema: z.object({
       fullPath: z.string().describe("Path of the directory to create."),
     }),
     execute: async ({ fullPath }) => {
       this.dependencies.logger.debug(
-        'Running workspace operation "CreateDirectory"',
+        'Running workspace operation "Mkdir"',
         { path: fullPath },
       );
       const { error } = await tryCatch(() =>
         this.dependencies.fsClient.mkdir(fullPath),
       );
       if (error) {
-        this.logger.error('Workspace operation "CreateDirectory" failed', {
+        this.logger.error('Workspace operation "Mkdir" failed', {
           path: fullPath,
           error,
         });
         return {
-          error: `Workspace operation "CreateDirectory" failed for path "${fullPath}": ${error.message || "Unknown filesystem error"}`,
+          error: `Workspace operation "Mkdir" failed for path "${fullPath}": ${error.message || "Unknown filesystem error"}`,
           path: fullPath,
           created: false,
         };
@@ -166,7 +166,7 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
 
   WriteFile = tool({
     description:
-      "Write text content to a file. Creates the file if it does not exist, overwrites if it does.",
+      "Write content to files. Creates the file if it does not exist, overwrites if it does.",
     inputSchema: z.object({
       fullPath: z.string().describe("Path of the file to write."),
       content: z.string().describe("The text content to write to the file."),
@@ -203,7 +203,7 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
   });
 
   Remove = tool({
-    description: "Remove any file or directory with this tool.",
+    description: "Delete files or directories.",
     inputSchema: z.object({
       fullPath: z.string().describe("Path of the file or directory to remove"),
     }),
@@ -232,7 +232,7 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
 
   Move = tool({
     description:
-      "Move or rename a file or directory from one path to another path.",
+      "Move/rename files or directories.",
     inputSchema: z.object({
       sourceFullPath: z
         .string()

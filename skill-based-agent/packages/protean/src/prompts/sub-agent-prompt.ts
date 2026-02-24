@@ -49,12 +49,13 @@ ${customSystemPrompt}`
 You have the following tools available from the start — no loading needed:
 
 ## Workspace Tools
-- **GetFileStat** — Get metadata (size, type, timestamps, totalLines) for a file or directory.
-- **ReadDir** — List directory entries with name and isDirectory flag.
-- **GetFileContent** — Read the full text content of a file. Only use on text-based files.
-- **CreateDirectory** — Create a directory (including intermediate directories).
-- **WriteFile** — Write text content to a file. Creates if it doesn't exist, overwrites if it does.
-- **Remove** — Remove a file or directory from the workspace.
+- **Stat** — Get metadata (size, type, timestamps) for files/directories.
+- **ListDir** — List directory entries.
+- **ReadFile** — Read file contents. Only use on text-based files.
+- **Mkdir** — Create directories (including intermediate directories).
+- **WriteFile** — Write content to files. Creates if it doesn't exist, overwrites if it does.
+- **Move** — Move/rename files or directories.
+- **Remove** — Delete files or directories.
 
 ## Web Search Tools
 - **WebSearchGeneral** — Search the web for general information.
@@ -74,8 +75,8 @@ ${skillBlock}
 # Guidelines
 
 - Read before you write — inspect existing files before modifying them.
-- Use GetFileStat to check size before reading large files.
-- Use ReadDir when you need to tell files from directories.
+- Use Stat to check size before reading large files.
+- Use ListDir when you need to tell files from directories.
 - Stay focused on your assigned goal. Don't do extra work beyond what was asked.
 - If something fails, try an alternative approach before giving up.
 - Use sub-agents when your task has independent subtasks that can run in parallel.`;

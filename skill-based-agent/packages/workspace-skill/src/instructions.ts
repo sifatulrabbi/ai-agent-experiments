@@ -8,43 +8,46 @@ All paths are resolved relative to the workspace root unless an absolute path is
 
 ## Available Tools
 
-### GetFileStat
+### Stat
 
-Returns metadata for a single file or directory: size (bytes), isDirectory, modified, and created timestamps.
+Get metadata (size, type, timestamps) for files/directories.
 Use this to check whether a path is a file or directory, or to inspect size before reading.
 
-### ReadDir
+### ListDir
 
-Returns directory entries with both name and isDirectory flag.
+List directory entries.
 Use this to explore what exists at a location and distinguish files from directories.
 
-### GetFileContent
+### ReadFile
 
-Returns the full text content of a file. Only use on text files (source code, config, markdown, etc.).
-For large files, check GetFileStat first to avoid reading unexpectedly large content.
+Read file contents.
+Only use on text files (source code, config, markdown, etc.).
+For large files, check Stat first to avoid reading unexpectedly large content.
 
-### CreateDirectory
+### Mkdir
 
+Create directories.
 Creates a directory at the given path, including any missing intermediate directories.
 
 ### WriteFile
 
-Writes text content to a file. Creates the file if it doesn't exist, overwrites if it does.
+Write content to files.
+Creates the file if it doesn't exist, overwrites if it does.
 Always confirm with the user before overwriting existing files.
 
 ### Move
 
-Move or rename a file or directory from one path to another path.
+Move/rename files or directories.
 Use this when reorganizing files or renaming existing paths.
 
 ### Remove
 
-Remove either a directory or file from the workspace.
+Delete files or directories.
 
 ## Guidelines
 
 - Read before you write: inspect existing files before modifying them.
-- Use GetFileStat to check size before reading large files.
-- Prefer ReadDir when you need to tell files from directories.
+- Use Stat to check size before reading large files.
+- Prefer ListDir when you need to tell files from directories.
 - Use Move for renaming or relocating existing files/directories instead of re-writing content.
 - Never write to paths outside the workspace root.`;

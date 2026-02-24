@@ -85,7 +85,7 @@ export function detectFilesFromToolResult(
   const obj = output as Record<string, unknown>;
   const files: DetectedFile[] = [];
 
-  // CreateDirectory → { fullPath } without bytesWritten
+  // Mkdir → { fullPath } without bytesWritten
   // WriteFile → { fullPath, bytesWritten }
   if (typeof obj.fullPath === "string" && obj.fullPath.length > 0) {
     const isDir =
