@@ -25,6 +25,7 @@ const emptyModelSelection: ModelSelection = {
   providerId: "",
   modelId: "",
   reasoningBudget: "none",
+  runtimeProvider: "",
 };
 
 export const useThreadUiStore = create<ThreadUiStore>()((set) => ({

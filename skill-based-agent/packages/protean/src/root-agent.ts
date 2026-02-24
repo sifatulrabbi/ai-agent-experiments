@@ -81,7 +81,7 @@ async function createSkills(opts: RootAgentOpts, logger: Logger) {
 }
 
 export async function createRootAgent(opts: RootAgentOpts, logger: Logger) {
-  const model = createModelFromSelection(opts.modelSelection, logger);
+  const { model } = createModelFromSelection(opts.modelSelection, logger);
   const baseTools = {
     ...webSearchTools,
     ...createWorkspaceTools(opts, logger),

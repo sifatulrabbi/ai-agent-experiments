@@ -78,13 +78,18 @@ export function ModelSelectorDropdown({
     maxLabelLength,
   );
 
-  function handleSelect(providerId: string, modelId: string) {
+  function handleSelect(
+    providerId: string,
+    modelId: string,
+    runtimeProvider: string,
+  ) {
     const reasoning = getModelReasoningById(providers, providerId, modelId);
     onChange({
       modelId,
       providerId,
       reasoningBudget: (reasoning?.defaultValue ??
         "none") as ModelSelection["reasoningBudget"],
+      runtimeProvider,
     });
     setOpen(false);
   }
@@ -137,7 +142,13 @@ export function ModelSelectorDropdown({
                     <ModelSelectorItem
                       key={`${provider.id}-${model.id}`}
                       value={`${provider.name} ${model.name}`}
-                      onSelect={() => handleSelect(provider.id, model.id)}
+                      onSelect={() =>
+                        handleSelect(
+                          provider.id,
+                          model.id,
+                          model.runtimeProvider,
+                        )
+                      }
                     >
                       <ModelSelectorLogoGroup>
                         <ModelSelectorLogo provider={provider.id} />

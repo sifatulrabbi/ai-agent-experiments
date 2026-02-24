@@ -51,6 +51,7 @@ export function resolveModelSelection(args: {
       providerId: candidate.providerId,
       modelId: candidate.modelId,
       reasoningBudget: reasoningBudget as ModelSelection["reasoningBudget"],
+      runtimeProvider: model.runtimeProvider,
     };
   }
 
@@ -68,6 +69,7 @@ export function isSameModelSelection(
   return (
     a.providerId === b.providerId &&
     a.modelId === b.modelId &&
-    a.reasoningBudget === b.reasoningBudget
+    a.reasoningBudget === b.reasoningBudget &&
+    a.runtimeProvider === b.runtimeProvider
   );
 }

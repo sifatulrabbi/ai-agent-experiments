@@ -12,11 +12,13 @@ describe("parseModelSelection", () => {
       providerId: "openrouter",
       modelId: "test/model",
       reasoningBudget: "none",
+      runtimeProvider: "openrouter",
     });
     expect(result).toEqual({
       providerId: "openrouter",
       modelId: "test/model",
       reasoningBudget: "none",
+      runtimeProvider: "openrouter",
     });
   });
 
@@ -29,6 +31,7 @@ describe("parseModelSelection", () => {
         providerId: "x",
         modelId: "y",
         reasoningBudget: "invalid",
+        runtimeProvider: "openrouter",
       }),
     ).toBeUndefined();
   });
@@ -67,7 +70,12 @@ describe("resolveModelSelection", () => {
   it("falls back to default when both request and thread are invalid", () => {
     const result = resolveModelSelection({
       request: { providerId: "bad", modelId: "bad", reasoningBudget: "none" },
-      thread: { providerId: "bad", modelId: "bad2", reasoningBudget: "none" },
+      thread: {
+        providerId: "bad",
+        modelId: "bad2",
+        reasoningBudget: "none",
+        runtimeProvider: "openrouter",
+      },
     });
     const defaultSelection = getDefaultModelSelection();
     expect(result).toEqual(defaultSelection);

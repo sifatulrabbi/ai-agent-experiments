@@ -2,16 +2,38 @@ import assert from "node:assert";
 import type { LanguageModel } from "ai";
 import {
   createOpenRouter,
-  type OpenRouterProviderOptions,
+  OpenRouterChatSettings,
 } from "@openrouter/ai-sdk-provider";
+import {
+  findModel,
+  type AIModelEntry,
+  type ModelSelection,
+} from "@protean/model-catalog";
 import type { Logger } from "@protean/logger";
-import type { ModelSelection } from "@protean/model-catalog";
 
 export function createModelFromSelection(
   modelSelection: ModelSelection,
   logger: Logger,
-): LanguageModel {
-  if (modelSelection.providerId === "openrouter") {
+): { model: LanguageModel; modelInfo: AIModelEntry } {
+  const fullModelEntry = findModel(
+    modelSelection.providerId,
+    modelSelection.modelId,
+  );
+
+  if (!fullModelEntry) {
+    throw new Error("Model entry not found");
+  }
+
+  if (modelSelection.runtimeProvider !== fullModelEntry.runtimeProvider) {
+    logger.warn("Model selection runtime provider mismatch.", {
+      modelId: modelSelection.modelId,
+      providerId: modelSelection.providerId,
+      runtimeProviderFromCatalog: fullModelEntry.runtimeProvider,
+      runtimeProviderFromSelection: modelSelection.runtimeProvider,
+    });
+  }
+
+  if (modelSelection.runtimeProvider === "openrouter") {
     assert(process.env.OPENROUTER_API_KEY, "OPENROUTER_API_KEY is needed.");
 
     const openrouter = createOpenRouter({
@@ -25,13 +47,15 @@ export function createModelFromSelection(
 
     logger.debug("Model config:", modelSelection);
 
-    let reasoning: OpenRouterProviderOptions["reasoning"] = {
-      enabled: false,
-      effort: "none",
+    const chatSettings: OpenRouterChatSettings = {
+      provider: {
+        sort: "throughput",
+        allow_fallbacks: true,
+      },
     };
 
     if (modelSelection.reasoningBudget !== "none") {
-      reasoning = {
+      chatSettings.reasoning = {
         enabled: true,
         effort: modelSelection.reasoningBudget as
           | "high"
@@ -41,15 +65,13 @@ export function createModelFromSelection(
       };
     }
 
-    return openrouter(modelSelection.modelId, {
-      reasoning,
-      provider: {
-        order: ["fireworks"],
-        allow_fallbacks: true,
-        sort: "throughput",
-      },
-    });
+    return {
+      model: openrouter(modelSelection.modelId, chatSettings),
+      modelInfo: fullModelEntry,
+    };
   }
 
-  throw new Error(`Unsupported runtime provider: ${modelSelection.providerId}`);
+  throw new Error(
+    `Unsupported runtime provider: ${modelSelection.runtimeProvider}`,
+  );
 }

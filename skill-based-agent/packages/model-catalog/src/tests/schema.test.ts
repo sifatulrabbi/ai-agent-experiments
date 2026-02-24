@@ -7,6 +7,7 @@ describe("modelSelectionSchema", () => {
       providerId: "openrouter",
       modelId: "anthropic/claude-3.5-sonnet",
       reasoningBudget: "medium",
+      runtimeProvider: "openrouter",
     });
     expect(result.success).toBe(true);
   });
@@ -17,6 +18,7 @@ describe("modelSelectionSchema", () => {
         providerId: "openrouter",
         modelId: "test/model",
         reasoningBudget: budget,
+        runtimeProvider: "openrouter",
       });
       expect(result.success).toBe(true);
     }
@@ -27,6 +29,7 @@ describe("modelSelectionSchema", () => {
       providerId: "",
       modelId: "test/model",
       reasoningBudget: "none",
+      runtimeProvider: "openrouter",
     });
     expect(result.success).toBe(false);
   });
@@ -36,6 +39,7 @@ describe("modelSelectionSchema", () => {
       providerId: "openrouter",
       modelId: "",
       reasoningBudget: "none",
+      runtimeProvider: "openrouter",
     });
     expect(result.success).toBe(false);
   });
@@ -45,6 +49,7 @@ describe("modelSelectionSchema", () => {
       providerId: "openrouter",
       modelId: "test/model",
       reasoningBudget: "extreme",
+      runtimeProvider: "openrouter",
     });
     expect(result.success).toBe(false);
   });

@@ -10,4 +10,5 @@ export interface ModelSelection {
   providerId: string;
   modelId: string;
   reasoningBudget: ReasoningBudget;
+  runtimeProvider: string;
 }

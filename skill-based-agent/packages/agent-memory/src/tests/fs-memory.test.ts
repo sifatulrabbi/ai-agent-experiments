@@ -18,6 +18,7 @@ const defaultModelSelection: ModelSelection = {
   providerId: "openrouter",
   modelId: "moonshotai/kimi-k2.5",
   reasoningBudget: "medium",
+  runtimeProvider: "openrouter",
 };
 
 let root: string;
@@ -106,6 +107,7 @@ describe("createFsMemory", () => {
         providerId: "openrouter",
         modelId: "gpt-5",
         reasoningBudget: "high",
+        runtimeProvider: "openrouter",
       },
     });
 

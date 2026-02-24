@@ -1,10 +1,6 @@
 import { z } from "zod";
 import catalogJson from "./data/models.catalog.json";
-import type {
-  AIModelEntry,
-  AIModelProviderEntry,
-  RuntimeProvider,
-} from "./catalog-types";
+import type { AIModelEntry, AIModelProviderEntry } from "./catalog-types";
 import type { ModelSelection, ReasoningBudget } from "./types";
 
 const reasoningBudgetSchema = z.enum(["none", "low", "medium", "high"]);
@@ -123,6 +119,9 @@ function inferProviderName(providerId: string, modelName?: string): string {
   return toTitleCase(providerId);
 }
 
+const OUTPUT_WINDOW_SIMILARITY_THRESHOLD = 0.9;
+const OUTPUT_WINDOW_FALLBACK_RATIO = 0.3;
+
 function buildContextLimitsFromOpenRouterModel(
   model: z.infer<typeof openRouterModelSchema>,
 ): AIModelEntry["contextLimits"] {
@@ -133,14 +132,18 @@ function buildContextLimitsFromOpenRouterModel(
       : undefined;
   const total = providerContextLength ?? model.context_length;
   const reportedMaxOutput = model.top_provider?.max_completion_tokens;
-  const maxOutput =
+  let maxOutput =
     typeof reportedMaxOutput === "number" && reportedMaxOutput > 0
       ? Math.min(total, reportedMaxOutput)
       : total;
-  const maxInput =
-    typeof reportedMaxOutput === "number" && reportedMaxOutput > 0
-      ? Math.max(0, total - maxOutput)
-      : total;
+
+  // Some OpenRouter entries report output windows that are effectively the
+  // entire context size. Treat those as ambiguous and reserve a safer 30%.
+  if (maxOutput / total >= OUTPUT_WINDOW_SIMILARITY_THRESHOLD) {
+    maxOutput = Math.max(1, Math.floor(total * OUTPUT_WINDOW_FALLBACK_RATIO));
+  }
+
+  const maxInput = Math.max(0, total - maxOutput);
 
   return {
     total,
@@ -179,7 +182,7 @@ const providers: AIModelProviderEntry[] = parsedLegacyCatalog
         id: model.id,
         name: model.name,
         providerId: model.providerId,
-        runtimeProvider: model.runtimeProvider as RuntimeProvider,
+        runtimeProvider: model.runtimeProvider,
         features: {
           reasoning: model.reasoning.budgets.some((b) => b !== "none"),
           tools: false,
@@ -215,7 +218,7 @@ const providers: AIModelProviderEntry[] = parsedLegacyCatalog
             id: model.id,
             name: model.name,
             providerId,
-            runtimeProvider: "openrouter" as RuntimeProvider,
+            runtimeProvider: "openrouter",
             features: {
               reasoning: modelSupportsReasoning,
               tools: supportsTools(model.supported_parameters ?? []),
@@ -239,34 +242,44 @@ for (const provider of providers) {
   }
 }
 
-const defaultModelSelection = (() => {
-  const provider = providers.find((p) => p.id === "stepfun");
-
-  let model = provider?.models.find(
-    (m) => m.id === "stepfun/step-3.5-flash:free",
-  );
-  // in case the free is not available anymore
-  if (!model && provider) {
-    model = provider?.models.find((m) => m.id === "stepfun/step-3.5-flash");
-  }
-
-  if (!provider || !model) {
-    throw new Error("Model catalog is empty");
-  }
-
-  return {
-    providerId: provider.id,
-    modelId: model.id,
-    reasoningBudget: model.reasoning.defaultValue as ReasoningBudget,
-  } satisfies ModelSelection;
-})();
-
 export function getModelCatalog(): AIModelProviderEntry[] {
   return providers;
 }
 
 export function getDefaultModelSelection(): ModelSelection {
-  return defaultModelSelection;
+  const modelsOfChoice = [
+    "arcee-ai/trinity-large-preview:free",
+    "stepfun/step-3.5-flash:free",
+    "stepfun/step-3.5-flash",
+  ];
+
+  let providerId: string | undefined = undefined;
+  let model: AIModelEntry | undefined = undefined;
+
+  for (const modelId of modelsOfChoice) {
+    providerId = modelId.split("/")[0];
+    if (!providerId) continue;
+
+    const provider = providers.find((p) => p.id === providerId);
+    if (!provider) continue;
+
+    const modelEntry = provider.models.find((m) => m.id === modelId);
+    if (modelEntry) {
+      model = modelEntry;
+      break;
+    }
+  }
+
+  if (!providerId || !model) {
+    throw new Error("Model catalog is empty");
+  }
+
+  return {
+    providerId: providerId,
+    modelId: model.id,
+    reasoningBudget: model.reasoning.defaultValue as ReasoningBudget,
+    runtimeProvider: model.runtimeProvider,
+  } satisfies ModelSelection;
 }
 
 export function findModel(

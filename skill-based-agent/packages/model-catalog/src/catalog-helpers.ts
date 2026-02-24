@@ -60,5 +60,6 @@ export function resolveClientModelSelection(
     providerId: resolvedModel.providerId,
     modelId: resolvedModel.id,
     reasoningBudget: reasoningBudget as ModelSelection["reasoningBudget"],
+    runtimeProvider: resolvedModel.runtimeProvider,
   };
 }
