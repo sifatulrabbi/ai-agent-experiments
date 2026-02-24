@@ -74,7 +74,7 @@ function buildFile(
 
 /**
  * Detect files created by tool outputs.
- * Recognizes shapes from WriteFile, GenerateDocxFromCode,
+ * Recognizes shapes from WriteFile, Move, GenerateDocxFromCode,
  * DocxToMarkdown, DocxToImages, and ModifyDocxWithJson.
  */
 export function detectFilesFromToolResult(
@@ -96,6 +96,16 @@ export function detectFilesFromToolResult(
     files.push(
       buildFile(obj.fullPath, { sizeBytes: size, isDirectory: isDir }),
     );
+  }
+
+  // Move/rename → { sourceFullPath, destinationFullPath, moved }
+  // Surface destination path so UI reflects the new file name/location.
+  if (
+    obj.moved === true &&
+    typeof obj.destinationFullPath === "string" &&
+    obj.destinationFullPath.length > 0
+  ) {
+    files.push(buildFile(obj.destinationFullPath));
   }
 
   // GenerateDocxFromCode / ModifyDocxWithJson → { outputPath }

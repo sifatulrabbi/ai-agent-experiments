@@ -194,12 +194,19 @@ function isSkillToolName(toolName: string): boolean {
 function isFileToolName(toolName: string): boolean {
   const normalized = toolName.toLowerCase().replace(/[^a-z0-9]/g, "");
   const workspaceToolNames = new Set([
+    // New workspace tool names.
+    "stat",
+    "listdir",
+    "readfile",
+    "mkdir",
+    "writefile",
+    "move",
+    "remove",
+    // Legacy names kept for older transcripts.
     "getfilestat",
     "readdir",
     "getfilecontent",
     "createdirectory",
-    "writefile",
-    "remove",
   ]);
   return workspaceToolNames.has(normalized);
 }
