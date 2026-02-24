@@ -90,7 +90,9 @@ describe("findModel", () => {
       .flatMap(([providerId, models]) =>
         models.map((model) => ({ providerId, model })),
       )
-      .filter(({ model }) => getRawMaxOutput(model) / getTotalContext(model) >= 0.9);
+      .filter(
+        ({ model }) => getRawMaxOutput(model) / getTotalContext(model) >= 0.9,
+      );
 
     expect(nearFullEntries.length).toBeGreaterThan(0);
 
@@ -103,7 +105,9 @@ describe("findModel", () => {
 
       expect(parsedModel!.contextLimits.total).toBe(total);
       expect(parsedModel!.contextLimits.maxOutput).toBe(expectedMaxOutput);
-      expect(parsedModel!.contextLimits.maxInput).toBe(total - expectedMaxOutput);
+      expect(parsedModel!.contextLimits.maxInput).toBe(
+        total - expectedMaxOutput,
+      );
     }
   });
 

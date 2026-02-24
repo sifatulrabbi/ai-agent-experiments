@@ -3,10 +3,8 @@
 import { FolderOpenIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
-import { useThreadChatContext } from "@/components/chat/thread-chat-provider";
 
 export function ThreadHeader() {
-  const { activeThreadId: _ } = useThreadChatContext();
   const { toggleSidebar } = useSidebar();
 
   return (

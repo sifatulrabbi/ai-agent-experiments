@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { BrainIcon, CheckIcon, ChevronDownIcon, SparklesIcon, WrenchIcon } from "lucide-react";
+import {
+  BrainIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  SparklesIcon,
+  WrenchIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ModelSelector,
