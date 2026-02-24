@@ -72,7 +72,7 @@ function main() {
     result[providerId] = providerModels.get(providerId)!;
   }
 
-  writeFileSync(outputPath, JSON.stringify(result));
+  writeFileSync(outputPath, JSON.stringify(result, undefined, 2));
   console.log(`Written to ${outputPath}`);
 }
 

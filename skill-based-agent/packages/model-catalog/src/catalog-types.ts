@@ -1,10 +1,8 @@
-export type RuntimeProvider = "openrouter";
-
 export interface AIModelEntry {
   id: string;
   name: string;
   providerId: string;
-  runtimeProvider: RuntimeProvider;
+  runtimeProvider: string;
   features: {
     reasoning: boolean;
     tools: boolean;

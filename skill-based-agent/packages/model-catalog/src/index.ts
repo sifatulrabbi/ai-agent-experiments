@@ -3,11 +3,7 @@ export type { ModelSelection, ReasoningBudget } from "./types";
 
 export { modelSelectionSchema } from "./schema";
 
-export type {
-  RuntimeProvider,
-  AIModelEntry,
-  AIModelProviderEntry,
-} from "./catalog-types";
+export type { AIModelEntry, AIModelProviderEntry } from "./catalog-types";
 
 export {
   getModelCatalog,

@@ -189,9 +189,10 @@ export async function POST(request: Request) {
     {
       fs,
       modelSelection: {
-        providerId: fullModelEntry.runtimeProvider,
+        providerId: fullModelEntry.providerId,
         modelId: resolvedModelSelection.modelId,
         reasoningBudget: resolvedModelSelection.reasoningBudget,
+        runtimeProvider: fullModelEntry.runtimeProvider,
       },
     },
     consoleLogger,

@@ -12,7 +12,6 @@ export {
  * @deprecated Import from `@protean/model-catalog` instead.
  */
 export type {
-  RuntimeProvider,
   AIModelEntry,
   AIModelProviderEntry,
 } from "@protean/model-catalog";
