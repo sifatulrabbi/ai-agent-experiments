@@ -38,18 +38,16 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
   }
 
   Stat = tool({
-    description:
-      "Get metadata (size, type, timestamps) for files/directories.",
+    description: "Get metadata (size, type, timestamps) for files/directories.",
     inputSchema: z.object({
       fullPath: z
         .string()
         .describe("Path to the file or directory to inspect."),
     }),
     execute: async ({ fullPath }) => {
-      this.dependencies.logger.debug(
-        'Running workspace operation "Stat"',
-        { path: fullPath },
-      );
+      this.dependencies.logger.debug('Running workspace operation "Stat"', {
+        path: fullPath,
+      });
       const { result, error } = await tryCatch(async () => {
         const stat = await this.dependencies.fsClient.stat(fullPath);
         if (stat.isDirectory) {
@@ -78,8 +76,7 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
   });
 
   ListDir = tool({
-    description:
-      "List directory entries.",
+    description: "List directory entries.",
     inputSchema: z.object({
       fullPath: z.string().describe("Path to the directory to read."),
     }),
@@ -106,16 +103,14 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
   });
 
   ReadFile = tool({
-    description:
-      "Read file contents.",
+    description: "Read file contents.",
     inputSchema: z.object({
       fullPath: z.string().describe("Path to the file to read."),
     }),
     execute: async ({ fullPath }) => {
-      this.dependencies.logger.debug(
-        'Running workspace operation "ReadFile"',
-        { path: fullPath },
-      );
+      this.dependencies.logger.debug('Running workspace operation "ReadFile"', {
+        path: fullPath,
+      });
       const { result, error } = await tryCatch(() =>
         this.dependencies.fsClient.readFile(fullPath),
       );
@@ -135,16 +130,14 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
   });
 
   Mkdir = tool({
-    description:
-      "Create directories.",
+    description: "Create directories.",
     inputSchema: z.object({
       fullPath: z.string().describe("Path of the directory to create."),
     }),
     execute: async ({ fullPath }) => {
-      this.dependencies.logger.debug(
-        'Running workspace operation "Mkdir"',
-        { path: fullPath },
-      );
+      this.dependencies.logger.debug('Running workspace operation "Mkdir"', {
+        path: fullPath,
+      });
       const { error } = await tryCatch(() =>
         this.dependencies.fsClient.mkdir(fullPath),
       );
@@ -231,42 +224,43 @@ export class WorkspaceSkill extends Skill<WorkspaceSkillDeps> {
   });
 
   Move = tool({
-    description:
-      "Move/rename files or directories.",
+    description: "Move/rename files or directories.",
     inputSchema: z.object({
-      sourceFullPath: z
+      sourcePath: z
         .string()
-        .describe("Current path of the file or directory."),
-      destinationFullPath: z
+        .describe("Current full path of the file or directory."),
+      destinationPath: z
         .string()
-        .describe("Destination path for the file or directory."),
+        .describe("Destination full path for the file or directory."),
     }),
-    execute: async ({ sourceFullPath, destinationFullPath }) => {
+    execute: async ({ sourcePath, destinationPath }) => {
       this.dependencies.logger.debug('Running workspace operation "Move"', {
-        sourcePath: sourceFullPath,
-        destinationPath: destinationFullPath,
+        sourcePath,
+        destinationPath,
       });
+
       const { error } = await tryCatch(() =>
-        this.dependencies.fsClient.move(sourceFullPath, destinationFullPath),
+        this.dependencies.fsClient.move(sourcePath, destinationPath),
       );
+
       if (error) {
         this.logger.error('Workspace operation "Move" failed', {
-          sourcePath: sourceFullPath,
-          destinationPath: destinationFullPath,
+          sourcePath,
+          destinationPath,
           error,
         });
         return {
-          error: `Workspace operation "Move" failed for source "${sourceFullPath}" to destination "${destinationFullPath}": ${error.message || "Unknown filesystem error"}`,
-          sourceFullPath,
-          destinationFullPath,
+          error: `Workspace operation "Move" failed for source "${sourcePath}" to destination "${destinationPath}": ${error.message || "Unknown filesystem error"}`,
+          sourcePath,
+          destinationPath,
           moved: false,
         };
       }
 
       return {
         error: null,
-        sourceFullPath,
-        destinationFullPath,
+        sourcePath,
+        destinationPath,
         moved: true,
       };
     },
